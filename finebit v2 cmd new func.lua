@@ -1,4 +1,4 @@
-
+--@password 5267
 ------@libs
 local ffi = require("ffi")
 local c_entity = require ('gamesense/entity')
