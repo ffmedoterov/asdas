@@ -3556,6 +3556,7 @@ local correction do
             plist.set(ent, "Correction active", true)
             plist.set(ent, "Force body yaw", true)
             plist.set(ent, "Force body yaw value", yaw and antiaim_func.normalize_angle(yaw) or 0)
+            -- print(antiaim_func.normalize_angle(yaw) or 0)
             runtime.applied[ent] = true
         elseif runtime.applied[ent] then
             plist.set(ent, "Force body yaw", false)
@@ -4220,10 +4221,13 @@ local correction do
 
         local seen = {}
         local enemies = entity.get_players(true)
+        local target = client.current_threat()
         for i = 1, #enemies do
             local ent = enemies[i]
             seen[ent] = true
-            handle_player(ent)
+            if ent == target then
+                handle_player(ent)
+            end
         end
 
         local tick = globals.tickcount()
