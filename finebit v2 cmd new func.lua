@@ -1,6 +1,6 @@
 --@password 5267
 ------@libs
-local ffi = require("ffi") --12321321321`313123131qweqwewqew12312we21wqe
+local ffi = require("ffi") 
 local c_entity = require ('gamesense/entity')
 local color = require ("gamesense/color")
 local pui = require("gamesense/pui" or "pui")
