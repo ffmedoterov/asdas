@@ -1,1769 +1,1309 @@
 --@password 5267
-------@libs
-local ffi = require("ffi") 
-local c_entity = require ('gamesense/entity')
-local color = require ("gamesense/color")
-local pui = require("gamesense/pui" or "pui")
--- local http = require("gamesense/http")
-local base64 = require("gamesense/base64")
-local clipboard = require("gamesense/clipboard")
-local vector = require("vector")
-local json = require("json")
-local antiaim_func = require("gamesense/antiaim_funcs")
-------@libs
 
--- client.exec("Clear")
-
-local utils = { } do
-    utils.set_event_callback = function(event, callback, state)
-    local cb_state = state and client.set_event_callback or client.unset_event_callback
-
-    cb_state(event, callback)
-  end
-end
-
-local build = "Source"
-local lua_name = "FineBit"
-local brand = [[
-╔███████╗╔██╗╔███╗   ██╗╔███████╗╔██████═╗╔██╗╔████████╗
-║██╔════╝║██║║████╗  ██║║██╔════╝║██╔══██║║██║╚══╗██╔══╝
-║█████╗  ║██║║██╔██╗ ██║║█████╗  ║██████╔╝║██║   ║██║   
-║██╔══╝  ║██║║██║╚██╗██║║██╔══╝  ║██╔══██╗║██║   ║██║   
-║██║     ║██║║██║ ╚████║║███████╗║██████╔╝║██║   ║██║   
-╚══╝     ╚══╝╚══╝  ╚═══╝╚═══════╝╚══════╝ ╚══╝   ╚══╝   
-]]
-
-local defensive_v2 = {
-    active = false,
-    tick_count = 0,
-    last_tick = 0,
-    delayed_v2 = false
-}
-
-local name = "Admin"
-
--- client.exec('clear')
-client.color_log(200, 180, 100, ' ')
-client.color_log(200, 180, 100, brand)
-client.color_log(200, 180, 100, ' ')
-client.color_log(200, 180, 100, 'Welcome to ', lua_name , ', ', name, '! Your build is '..build)
+local assert, defer, error, getfenv, setfenv, getmetatable, setmetatable, ipairs,
+pairs, next, pcall, rawequal, rawset, rawlen, readfile, require, select,
+tonumber, tostring, type, unpack, xpcall =
+    assert, defer, error, getfenv, setfenv, getmetatable, setmetatable, ipairs,
+    pairs, next, pcall, rawequal, rawset, rawlen, readfile, require, select,
+    tonumber, tostring, type, unpack, xpcall
 
 
-
-local data = database.read("FineBit") or {}
-data.load_count = (data.load_count or 0) + 1
-client.set_event_callback("shutdown", function()
-database.write("FineBit", data)
-end)
-
-local elements = {
-button		= { type = "function",	arg = 2, unsavable = true },
-checkbox	= { type = "boolean",	arg = 1, init = false	},
-color_picker= { type = "table",		arg = 5 },
-combobox	= { type = "string",	arg = 2, variable = true },
-hotkey		= { type = "table",		arg = 3, enum = {[0] = "Always on", "On hotkey", "Toggle", "Off hotkey"} },
-label		= { type = "string",	arg = 1, unsavable = true },
-listbox		= { type = "number",	arg = 2, init = 0, variable = true },
-multiselect	= { type = "table",		arg = 2, init = {}, variable = true },
-slider		= { type = "number",	arg = 8 },
-textbox		= { type = "string",	arg = 1, init = "" },
-string		= { type = "string",	arg = 2, init = "" },
-unknown		= { type = "string",	arg = 2, init = "" } -- new_string type
-}
-
-local weapons = { "Global", "G3SG1 / SCAR-20", "SSG 08", "AWP", "R8 Revolver", "Desert Eagle", "Pistol", "Zeus", "Rifle", "Shotgun", "SMG", "Machine gun" }
-
-calculateGradien = function(color1, color2, text, speed)
-
-local output = ''
-
-local curtime = globals.curtime()
-
-for idx = 0, #text - 1 do  
-local x = idx * 10
-local wave = math.cos(8 * speed * curtime + x / 30)
-
--- Интерполяция цвета
-local r = lerp(color1[1], color2[1], clamp(wave, 0, 1))
-local g = lerp(color1[2], color2[2], clamp(wave, 0, 1))
-local b = lerp(color1[3], color2[3], clamp(wave, 0, 1))
-local a = color1[4] 
-
--- Формируем цвет в HEX формате
-local color = ('\a%02x%02x%02x%02x'):format(r, g, b, a)
-
-output = output .. color .. text:sub(idx + 1, idx + 1) -- Индекс + 1 для Lua
-end
-
-return output
-end
-
-local function mcopy (o)
-if type(o) ~= "table" then return o end
-local res = {} for k, v in pairs(o) do res[mcopy(k)] = mcopy(v) end return res
+local function mcopy(o)
+    if type(o) ~= "table" then return o end
+    local res = {}
+    for k, v in pairs(o) do res[mcopy(k)] = mcopy(v) end
+    return res
 end
 
 local table, math, string = mcopy(table), mcopy(math), mcopy(string)
 local ui, client = mcopy(ui), mcopy(client)
 
-table.find = function (t, j)  for k, v in pairs(t) do if v == j then return k end end return false  end
-table.ifind = function (t, j)  for i = 1, table.maxn(t) do if t[i] == j then return i end end  end
-table.qfind = function (t, j)  for i = 1, #t do if t[i] == j then return i end end  end
-table.ihas = function (t, ...) local arg = {...} for i = 1, table.maxn(t) do for j = 1, #arg do if t[i] == arg[j] then return true end end end return false end
+--#endregion
 
-table.minn = function (t) local s = 0 for i = 1, #t do if t[i] == nil then break end s = s + 1 end return s end
-table.filter = function (t)  local res = {} for i = 1, table.maxn(t) do if t[i] ~= nil then res[#res+1] = t[i] end end return res  end
-table.append = function (t, ...)  for i, v in ipairs{...} do table.insert(t, v) end  end
+--#region: globals
+
+table.find = function(t, j)
+    for k, v in pairs(t) do if v == j then return k end end
+    return false
+end
+table.ifind = function(t, j) for i = 1, table.maxn(t) do if t[i] == j then return i end end end
+table.qfind = function(t, j) for i = 1, #t do if t[i] == j then return i end end end
+table.ihas = function(t, ...)
+    local arg = { ... }
+    for i = 1, table.maxn(t) do for j = 1, #arg do if t[i] == arg[j] then return true end end end
+    return false
+end
+
+table.minn = function(t)
+    local s = 0
+    for i = 1, #t do
+        if t[i] == nil then break end
+        s = s + 1
+    end
+    return s
+end
+table.filter = function(t)
+    local res = {}
+    for i = 1, table.maxn(t) do if t[i] ~= nil then res[#res + 1] = t[i] end end
+    return res
+end
+table.append = function(t, ...) for i, v in ipairs { ... } do table.insert(t, v) end end
 table.copy = mcopy
 
-math.max_lerp_low_fps = (1 / 45) * 100
-math.clamp = function (x, a, b) if a > x then return a elseif b < x then return b else return x end end
-math.vector_lerp = function(start, end_pos, time) local frametime = globals.frametime()*100; time = time * math.min(frametime, math.max_lerp_low_fps); return start:lerp(end_pos, time) end
-math.lerp = function(start, end_pos, time) if start == end_pos then return end_pos end local frametime = globals.frametime() * 170; time = time * frametime; local val = start + (end_pos - start) * time; if(math.abs(val - end_pos) < 0.01) then return end_pos end return val end
-math.normalize_yaw = function(yaw) yaw = (yaw % 360 + 360) % 360 return yaw > 180 and yaw - 360 or yaw end
-local try_require = function (module, msg) local success, result = pcall(require, module) if success then return result else return error(msg) end end
-local ternary = function (c, a, b)  if c then return a else return b end  end
-local contend = function (func, callback, ...)
-local t = { pcall(func, ...) }
-if not t[1] then return type(callback) == "function" and callback(t[2]) or error(t[2], callback or 2) end
-return unpack(t, 2)
+local ternary = function(c, a, b) if c then return a else return b end end
+local contend = function(func, callback, ...)
+    local t = { pcall(func, ...) }
+    if not t[1] then return type(callback) == "function" and callback(t[2]) or error(t[2], callback or 2) end
+    return unpack(t, 2)
 end
 
-local config, package, aa_config, aa_package
+--#endregion
+
+--#region: directory tools
+
 local dirs = {
-execute = function (t, path, func)
-local p, k for _, s in ipairs(path) do
-k, p, t = s, t, t[s]
-if t == nil then return end
-end
-if p[k] then func(p[k]) end
-end,
-replace = function (t, path, value)
-local p, k for _, s in ipairs(path) do
-k, p, t = s, t, t[s]
-if t == nil then return end
-end
-p[k] = value
-end,
-find = function (t, path)
-local p, k for _, s in ipairs(path) do
-k, p, t = s, t, t[s]
-if t == nil then return end
-end
-return p[k]
-end,
+    execute = function(t, path, func)
+        local p, k
+        for _, s in ipairs(path) do
+            k, p, t = s, t, t[s]
+            if t == nil then return end
+        end
+        if p[k] then func(p[k]) end
+    end,
+    replace = function(t, path, value)
+        local p, k
+        for _, s in ipairs(path) do
+            k, p, t = s, t, t[s]
+            if t == nil then return end
+        end
+        p[k] = value
+    end,
+    find = function(t, path)
+        local p, k
+        for _, s in ipairs(path) do
+            k, p, t = s, t, t[s]
+            if t == nil then return end
+        end
+        return p[k]
+    end,
 }
 
-dirs.pave = function (t, place, path)
-local p = t for i, v in ipairs(path) do
-if type(p[v]) == "table" then p = p[v]
-else p[v] = (i < #path) and {} or place  p = p[v]  end
-end return t
-end
-
-dirs.extract = function (t, path)
-if not path or #path == 0 then return t end
-local j = dirs.find(t, path)
-return dirs.pave({}, j, path)
-end
-
-local ui_handler, ui_handler_mt, methods_mt = {}, {}, {
-element = {}, group = {}
-}
-
-local registry, ragebot, players = {}, {}, {} do
-client.set_event_callback("shutdown", function ()
-for k, v in next, registry do
-if v.__ref and not v.__rage then
-    if v.overridden then ui.set(k, v.original) end
-    ui.set_enabled(k, true)
-    ui.set_visible(k, not v.__hidden)
-end
-end
-end)
-client.set_event_callback("pre_config_save", function ()
-for k, v in next, registry do
-if v.__ref and not v.__rage and v.overridden then v.ovr_restore = {ui.get(k)}; ui.set(k, v.original) end
-end
-ragebot.cycle(function (active)
-for k, v in pairs(ragebot.context[active]) do if registry[k].overridden then ragebot.cache[active][k] = ui.get(k); ui.set(k, v) end end
-end, true)
-end)
-client.set_event_callback("post_config_save", function ()
-for k, v in next, registry do
-if v.__ref and not v.__rage and v.overridden then ui.set(k, unpack(v.ovr_restore)); v.ovr_restore = nil end
-end
-ragebot.cycle(function (active)
-for k, v in pairs(ragebot.context[active]) do
-    if registry[k].overridden then ui.set(k, ragebot.cache[active][k]); ragebot.cache[active][k] = nil end
-end
-end, true)
-end)
-end
-
-local elemence = {} do
-local callbacks = function (this, isref)
-if this.name == "Weapon type" and string.lower(registry[this.ref].tab) == "rage" then return ui.get(this.ref) end
-
-ui.set_callback(this.ref, function (self)
-if registry[self].__rage and ragebot.silent then return end
-for i = 0, #registry[self].callbacks, 1 do
-    if type(registry[self].callbacks[i]) == "function" then registry[self].callbacks[i](this) end
-end
-end)
-
-if this.type == "button" then return
-elseif this.type == "color_picker" or this.type == "hotkey" then
-registry[this.ref].callbacks[0] = function (self) this.value = { ui.get(self.ref) } end
-return { ui.get(this.ref) }
-else
-registry[this.ref].callbacks[0] = function (self) this.value = ui.get(self.ref) end
-if this.type == "multiselect" then
-    this.value = ui.get(this.ref)
-    registry[this.ref].callbacks[1] = function (self)
-        registry[this.ref].options = {}
-        for i = 1, #self.value do registry[this.ref].options[ self.value[i] ] = true end
+dirs.pave = function(t, place, path)
+    local p = t
+    for i, v in ipairs(path) do
+        if type(p[v]) == "table" then
+            p = p[v]
+        else
+            p[v] = (i < #path) and {} or place
+            p = p[v]
+        end
     end
-    registry[this.ref].callbacks[1](this)
-end
-return ui.get(this.ref)
-end
+    return t
 end
 
-elemence.new = function (ref, add)
-local self = {}; add = add or {}
+dirs.extract = function(t, path)
+    if not path or #path == 0 then return t end
+    local j = dirs.find(t, path)
+    return dirs.pave({}, j, path)
+end
 
-self.ref = ref
-self.name, self.type = ui.name(ref), ui.type(ref)
+--#endregion
+
+local pui, pui_mt, methods_mt = {}, {}, {
+    element = {}, group = {}
+}
+
+-- #endregion
+--
 
 --
-registry[ref] = registry[ref] or {
-type = self.type, ref = ref, tab = add.__tab, container = add.__container,
-__ref = add.__ref, __hidden = add.__hidden, __init = add.__init, __list = add.__list, __rage = add.__rage,
-__plist = add.__plist and not (self.type == "label" or self.type == "button" or self.type == "hotkey"),
+-- #region : Elements
 
-overridden = false, original = self.value, donotsave = add.__plist or false,
-callbacks = { [0] = add.__callback }, events = {}, depend = { [0] = {ref}, {}, {} },
+--#region: arguments
+
+local elements = {
+    button       = { type = "function", arg = 2, unsavable = true },
+    checkbox     = { type = "boolean", arg = 1, init = false },
+    color_picker = { type = "table", arg = 5 },
+    combobox     = { type = "string", arg = 2, variable = true },
+    hotkey       = { type = "table", arg = 3, enum = { [0] = "Always on", "On hotkey", "Toggle", "Off hotkey" } },
+    label        = { type = "string", arg = 1, unsavable = true },
+    listbox      = { type = "number", arg = 2, init = 0, variable = true },
+    multiselect  = { type = "table", arg = 2, init = {}, variable = true },
+    slider       = { type = "number", arg = 8 },
+    textbox      = { type = "string", arg = 1, init = "" },
+    string       = { type = "string", arg = 2, init = "" },
+    unknown      = { type = "string", arg = 2, init = "" } -- new_string type
 }
 
-registry[ref].self = setmetatable(self, methods_mt.element)
-self.value = callbacks(self, add.__ref)
+local weapons = { "Global", "G3SG1 / SCAR-20", "SSG 08", "AWP", "R8 Revolver", "Desert Eagle", "Pistol", "Zeus", "Rifle",
+    "Shotgun", "SMG", "Machine gun" }
 
-if add.__rage then
-methods_mt.element.set_callback(self, ragebot.memorize)
-end
-if registry[ref].__plist then
-players.elements[#players.elements+1] = self
-methods_mt.element.set_callback(self, players.slot_update, true)
-end
+--#endregion
 
-return self
-end
+--#region: registry
 
-elemence.group = function (...)
-return setmetatable({ ... }, methods_mt.group)
-end
-
-elemence.string = function (name, default)
-local this = {}
-
-this.ref = ui.new_string(name, default or "")
-this.type = "string"
-this[0] = {savable = true}
-
-return setmetatable(this, methods_mt.element)
-end
-
-elemence.features = function (self, args)
+local registry, ragebot, players = {}, {}, {}
 do
-local addition
-local v, kind = args[1], type(args[1])
+    client.set_event_callback("shutdown", function()
+        for k, v in next, registry do
+            if v.__ref and not v.__rage then
+                if v.overridden then ui.set(k, v.original) end
+                ui.set_enabled(k, true)
+                ui.set_visible(k, not v.__hidden)
+            end
+        end
+        ragebot.cycle(function(active)
+            for k, v in pairs(ragebot.context[active]) do
+                if v ~= nil and registry[k].overridden then
+                    ui.set(k, v)
+                end
+            end
+        end, true)
+    end)
+    client.set_event_callback("pre_config_save", function()
+        for k, v in next, registry do
+            if v.__ref and not v.__rage and v.overridden then
+                v.ovr_restore = { ui.get(k) }; ui.set(k, v.original)
+            end
+        end
+        ragebot.cycle(function(active)
+            for k, v in pairs(ragebot.context[active]) do if registry[k].overridden then
+                    ragebot.cache[active][k] = ui.get(k); ui.set(k, v)
+                end end
+        end, true)
+    end)
+    client.set_event_callback("post_config_save", function()
+        for k, v in next, registry do
+            if v.__ref and not v.__rage and v.overridden then
+                ui.set(k, unpack(v.ovr_restore)); v.ovr_restore = nil
+            end
+        end
+        ragebot.cycle(function(active)
+            for k, v in pairs(ragebot.context[active]) do
+                if k ~= nil and ragebot.cache[active] ~= nil and ragebot.cache[active][k] ~= nil then
+                    if registry[k].overridden then
+                        ui.set(k, ragebot.cache[active][k]); ragebot.cache[active][k] = nil
+                    end
+                end
+            end
+        end, true)
+    end)
+end
 
-if not addition and (kind == "table" or kind == "cdata") and not v.r then
-    addition = "color"
-    local r, g, b, a = v[1] or 255, v[2] or 255, v[3] or 255, v[4] or 255
-    self.color = elemence.new( ui.new_color_picker(registry[self.ref].tab, registry[self.ref].container, self.name, r, g, b, a), {
-        __init = { r, g, b, a },
-        __plist = registry[self.ref].__plist
-    } )
-elseif not addition and (kind == "table" or kind == "cdata") and v.r then
-    addition = "color"
-    self.color = elemence.new( ui.new_color_picker(registry[self.ref].tab, registry[self.ref].container, self.name, v.r, v.g, v.b, v.a), {
-        __init = { v.r, v.g, v.b, v.a },
-        __plist = registry[self.ref].__plist
-    } )
-elseif not addition and kind == "number" then
-    addition = "hotkey"
-    self.hotkey = elemence.new( ui.new_hotkey(registry[self.ref].tab, registry[self.ref].container, self.name, true, v, {
-        __init = v
-    }) )
-end
-registry[self.ref].depend[0][2] = addition and self[addition].ref
-registry[self.ref].__addon = addition
-end
+--#endregion
+
+--#region: elemence
+
+local elemence = {}
 do
-registry[self.ref].donotsave = args[2] == false
-end
-end
+    local callbacks = function(this, isref)
+        if this.name == "Weapon type" and string.lower(registry[this.ref].tab) == "rage" then return ui.get(this.ref) end
 
-elemence.memorize = function (self, path, origin)
--- Проверка типа self
-if type(self) ~= "table" then
-error("Expected 'self' to be a table")
-end
+        ui.set_callback(this.ref, function(self)
+            if registry[self].__rage and ragebot.silent then return end
+            for i = 0, #registry[self].callbacks, 1 do
+                if type(registry[self].callbacks[i]) == "function" then registry[self].callbacks[i](this) end
+            end
+        end)
 
-if registry[self.ref].donotsave then return end
-
-if not elements[self.type].unsavable then
-dirs.pave(origin, self.ref, path)
-end
-
-if self.color then
-path[#path] = path[#path] .. "_c"
-dirs.pave(origin, self.color.ref, path)
-end
-if self.hotkey then
-path[#path] = path[#path] .. "_h"
-dirs.pave(origin, self.hotkey.ref, path)
-end
-end
-
-
-elemence.hidden_refs = {
-"Unlock hidden cVars", "Allow custom game events", "Faster grenade toss",
-"sv_maxunlag", "sv_maxusrcmdprocessticks", "sv_clockcorrection_msecs",
-}
-
-local cases = {
-combobox = function (v)
-if v[3] == true then
-    return v[1].value ~= v[2]
-else
-    for i = 2, #v do
-        if v[1].value == v[i] then return true end
+        if this.type == "button" then
+            return
+        elseif this.type == "color_picker" or this.type == "hotkey" then
+            registry[this.ref].callbacks[0] = function(self) this.value = { ui.get(self.ref) } end
+            return { ui.get(this.ref) }
+        else
+            registry[this.ref].callbacks[0] = function(self) this.value = ui.get(self.ref) end
+            if this.type == "multiselect" then
+                this.value = ui.get(this.ref)
+                registry[this.ref].callbacks[1] = function(self)
+                    registry[this.ref].options = {}
+                    for i = 1, #self.value do registry[this.ref].options[self.value[i]] = true end
+                end
+                registry[this.ref].callbacks[1](this)
+            end
+            return ui.get(this.ref)
+        end
     end
-end
-return false
-end,
-listbox = function (v)
-if v[3] == true then
-    return v[1].value ~= v[2]
-else
-    for i = 2, #v do
-        if v[1].value == v[i] then return true end
+
+    elemence.new = function(ref, add)
+        local self = {}; add = add or {}
+
+        self.ref = ref
+        self.name, self.type = ui.name(ref), ui.type(ref)
+
+        --
+        registry[ref] = registry[ref] or {
+            type = self.type,
+            ref = ref,
+            tab = add.__tab,
+            container = add.__container,
+            __ref = add.__ref,
+            __hidden = add.__hidden,
+            __init = add.__init,
+            __list = add.__list,
+            __rage = add.__rage,
+            __plist = add.__plist and not (self.type == "label" or self.type == "button" or self.type == "hotkey"),
+
+            overridden = false,
+            original = self.value,
+            donotsave = add.__plist or false,
+            callbacks = { [0] = add.__callback },
+            events = {},
+            depend = { [0] = { ref }, {}, {} },
+        }
+
+        registry[ref].self = setmetatable(self, methods_mt.element)
+        self.value = callbacks(self, add.__ref)
+
+        if add.__rage then
+            methods_mt.element.set_callback(self, ragebot.memorize)
+        end
+        if registry[ref].__plist then
+            players.elements[#players.elements + 1] = self
+            methods_mt.element.set_callback(self, players.slot_update, true)
+        end
+
+        return self
     end
+
+    elemence.group = function(...)
+        return setmetatable({ ... }, methods_mt.group)
+    end
+
+    elemence.string = function(name, default)
+        local this = {}
+
+        this.ref = ui.new_string(name, default or "")
+        this.type = "string"
+        this[0] = { savable = true }
+
+        return setmetatable(this, methods_mt.element)
+    end
+
+    elemence.features = function(self, args)
+        do
+            local addition
+            local v, kind = args[1], type(args[1])
+
+            if not addition and (kind == "table" or kind == "cdata") and not v.r then
+                addition = "color"
+                local r, g, b, a = v[1] or 255, v[2] or 255, v[3] or 255, v[4] or 255
+                self.color = elemence.new(
+                ui.new_color_picker(registry[self.ref].tab, registry[self.ref].container, self.name, r, g, b, a), {
+                    __init = { r, g, b, a },
+                    __plist = registry[self.ref].__plist
+                })
+            elseif not addition and (kind == "table" or kind == "cdata") and v.r then
+                addition = "color"
+                self.color = elemence.new(
+                ui.new_color_picker(registry[self.ref].tab, registry[self.ref].container, self.name, v.r, v.g, v.b, v.a),
+                    {
+                        __init = { v.r, v.g, v.b, v.a },
+                        __plist = registry[self.ref].__plist
+                    })
+            elseif not addition and kind == "number" then
+                addition = "hotkey"
+                self.hotkey = elemence.new(ui.new_hotkey(registry[self.ref].tab, registry[self.ref].container, self.name,
+                    true, v, {
+                    __init = v
+                }))
+            end
+            registry[self.ref].depend[0][2] = addition and self[addition].ref
+            registry[self.ref].__addon = addition
+        end
+        do
+            registry[self.ref].donotsave = args[2] == false
+        end
+    end
+
+    elemence.memorize = function(self, path, origin)
+        if registry[self.ref].donotsave then return end
+
+        if not elements[self.type].unsavable then
+            dirs.pave(origin, self.ref, path)
+        end
+
+        if self.color then
+            path[#path] = path[#path] .. "_c"
+            dirs.pave(origin, self.color.ref, path)
+        end
+        if self.hotkey then
+            path[#path] = path[#path] .. "_h"
+            dirs.pave(origin, self.hotkey.ref, path)
+        end
+    end
+
+    elemence.hidden_refs = {
+        "Unlock hidden cvars", "Allow custom game events", "Faster grenade toss",
+        "sv_maxunlag", "sv_maxusrcmdprocessticks", "sv_clockcorrection_msecs", -- m4kb12jk
+    }
+
+    --#region: depend
+
+    local cases = {
+        combobox = function(v)
+            if v[3] == true then
+                return v[1].value ~= v[2]
+            else
+                for i = 2, #v do
+                    if v[1].value == v[i] then return true end
+                end
+            end
+            return false
+        end,
+        listbox = function(v)
+            if v[3] == true then
+                return v[1].value ~= v[2]
+            else
+                for i = 2, #v do
+                    if v[1].value == v[i] then return true end
+                end
+            end
+            return false
+        end,
+        multiselect = function(v)
+            return table.ihas(v[1].value, unpack(v, 2))
+        end,
+        slider = function(v)
+            return v[2] <= v[1].value and v[1].value <= (v[3] or v[2])
+        end,
+    }
+
+    local depend = function(v)
+        local condition = false
+
+        if type(v[2]) == "function" then
+            condition = v[2](v[1])
+        else
+            local f = cases[v[1].type]
+            if f then
+                condition = f(v)
+            else
+                condition = v[1].value == v[2]
+            end
+        end
+
+        return condition and true or false
+    end
+
+    elemence.dependant = function(owner, dependant, dis)
+        local count = 0
+
+        for i = 1, #owner do
+            if depend(owner[i]) then count = count + 1 else break end
+        end
+
+        local allow, action = count >= #owner, dis and "set_enabled" or "set_visible"
+
+        for i, v in ipairs(dependant) do ui[action](v, allow) end
+    end
+
+    --#endregion
 end
-return false
-end,
-multiselect = function (v)
-return table.ihas(v[1].value, unpack(v, 2))
-end,
-slider = function (v)
-return v[2] <= v[1].value and v[1].value <= (v[3] or v[2])
-end,
-}
 
-local depend = function (v)
-local condition = false
+--#endregion
 
-if type(v[2]) == "function" then
-condition = v[2]( v[1] )
-else
-local f = cases[v[1].type]
-if f then condition = f(v)
-else condition = v[1].value == v[2] end
-end
+--#region: utils
 
-return condition and true or false
-end
-
-elemence.dependant = function (owner, dependant, dis)
-local count = 0
-
-for i = 1, #owner do
-if depend(owner[i]) then count = count + 1 else break end
-end
-
-local allow, action = count >= #owner, dis and "set_enabled" or "set_visible"
-
-for i, v in ipairs(dependant) do ui[action](v, allow) end
-end
-end
 local utils = {}
 
-utils.time_to_ticks = function(t)
-return math.floor(0.5 + (t / globals.tickinterval()))
-end
-
-utils.rgb_to_hex = function(color)
-return string.format("%02X%02X%02X%02X", color[1], color[2], color[3], color[4] or 255)
-end
-
-utils.animate_text = function(time, string, r, g, b, a, r1, g1, b1, a1)
-local t_out, t_out_iter = {}, 1
-local l = string:len() - 1
-
-local r_add = (r1 - r)
-local g_add = (g1 - g)
-local b_add = (b1 - b)
-local a_add = (a1 - a)
-
-for i = 1, #string do
-local iter = (i - 1)/(#string - 1) + time
-t_out[t_out_iter] = "\a" .. utils.rgb_to_hex({r + r_add * math.abs(math.cos( iter )), g + g_add * math.abs(math.cos( iter )), b + b_add * math.abs(math.cos( iter )), a + a_add * math.abs(math.cos( iter ))})
-
-t_out[t_out_iter+1] = string:sub(i, i)
-t_out_iter = t_out_iter + 2
-end
-
-return table.concat(t_out)
-end
-
-utils.hex_to_rgb = function (hex)
-hex = hex:gsub("^#", "")
-return tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16), tonumber(hex:sub(7, 8), 16) or 255
-end
-
-utils.gradient_text = function (text, colors, precision)
-local symbols, length = {}, #string.gsub(text, ".[\128-\191]*", "a")
-local s = 1 / (#colors - 1)
-precision = precision or 1
-
-local i = 0
-for letter in string.gmatch(text, ".[\128-\191]*") do
-i = i + 1
-
-local weight = i / length
-local cw = weight / s
-local j = math.ceil(cw)
-local w = (cw / j)
-local L, R = colors[j], colors[j+1]
-
-local r = L[1] + (R[1] - L[1]) * w
-local g = L[2] + (R[2] - L[2]) * w
-local b = L[3] + (R[3] - L[3]) * w
-local a = L[4] + (R[4] - L[4]) * w
-
-symbols[#symbols+1] = ((i-1) % precision == 0) and ("\a%02x%02x%02x%02x%s"):format(r, g, b, a, letter) or letter
-end
-
-symbols[#symbols+1] = "\aCDCDCDFF"
-
-return table.concat(symbols)
-end
-
-local gradients = function (col, text)
-local colors = {}; for w in string.gmatch(col, "\b%x+") do
-colors[#colors+1] = { utils.hex_to_rgb( string.sub(w, 2) ) }
-end
-if #colors > 0 then return utils.gradient_text(text, colors, #text > 8 and 2 or 1) end
-end
-
-utils.format = function (s)
-if type(s) == "string" then
-s = string.gsub(s, "\f<(.-)>", ui_handler.macros)
-s = string.gsub(s, "[\v\r\t]", {["\v"] = "\a".. ui_handler.accent, ["\r"] = "\aCDCDCDFF", ["\t"] = "    "})
-s = string.gsub(s, "([\b%x]-)%[(.-)%]", gradients)
-end return s
-end
-
-utils.unpack_color = function (...)
-local arg = {...}
-local kind = type(arg[1])
-
-if kind == "table" or kind == "cdata" or kind == "userdata" then
-if arg[1].r then
-return {arg[1].r, arg[1].g, arg[1].b, arg[1].a}
-elseif arg[1][1] then
-return {arg[1][1], arg[1][2], arg[1][3], arg[1][4]}
-end
-end
-
-return arg
-end
-
-local dispensers = {
-color_picker = function (args)
-args[1] = string.sub(utils.format(args[1]), 1, 117)
-
-if type(args[2]) ~= "number" then
-local col = args[2]
-args.n, args.req, args[2] = args.n + 3, args.req + 3, col.r
-table.insert(args, 3, col.g)
-table.insert(args, 4, col.b)
-table.insert(args, 5, col.a)
-end
-
-for i = args.req + 1, args.n do
-args.misc[i - args.req] = args[i]
-end
-
-args.data.__init = {args[2] or 255, args[3] or 255, args[4] or 255, args[5] or 255}
-end,
-listbox = function (args, variable)
-args[1] = string.sub(utils.format(args[1]), 1, 117)
-for i = args.req + 1, args.n do
-args.misc[i - args.req] = args[i]
-end
-
-args.data.__init, args.data.__list = 0, not variable and args[2] or {unpack(args, 2, args.n)}
-end,
-combobox = function (args, variable)
-args[1] = string.sub(utils.format(args[1]), 1, 117)
-for i = args.req + 1, args.n do
-args.misc[i - args.req] = args[i]
-end
-
-args.data.__init, args.data.__list = not variable and args[2][1] or args[2], not variable and args[2] or {unpack(args, 2, args.n)}
-end,
-multiselect = function (args, variable)
-args[1] = string.sub(utils.format(args[1]), 1, 117)
-for i = args.req + 1, args.n do
-args.misc[i - args.req] = args[i]
-end
-
-args.data.__init, args.data.__list = {}, not variable and args[2] or {unpack(args, 2, args.n)}
-end,
-slider = function (args)
-args[1] = string.sub(utils.format(args[1]), 1, 117)
-
-for i = args.req + 1, args.n do
-args.misc[i - args.req] = args[i]
-end
-
-args.data.__init = args[4] or args[2]
-end,
-button = function (args)
-args[2] = args[2] or function()end
-args[1] = string.sub(utils.format(args[1]), 1, 117)
-args.n, args.data.__callback = 2, args[2]
-end
-}
-
-utils.dispense = function (key, raw, ...)
-local args, group, ctx = {...}, {}, elements[key]
-
-if type(raw) == "table" then
-group[1], group[2] = raw[1], raw[2]
-group.__plist = raw.__plist
-else
-group[1], group[2] = raw, args[1]
-table.remove(args, 1)
-end
-
-args.n, args.data = table.maxn(args), {
-__tab = group[1], __container = group[2],
-__plist = group.__plist and true or nil
-}
-
-local variable = (ctx and ctx.variable) and type(args[2]) == "string"
-args.req, args.misc = not variable and ctx.arg or args.n, {}
-
-if dispensers[key] then
-dispensers[key](args, variable)
-else
-for i = 1, args.n do
-if type(args[i]) == "string" then
-    args[i] = string.sub(utils.format(args[i]), 1, 117)
-end
-
-if i > args.req then args.misc[i - args.req] = args[i] end
-end
-args.data.__init = ctx.init
-end
-
-return args, group
-end
-
-local render = renderer
-
-local table_concat = table.concat
-local table_insert = table.insert
-local to_number = tonumber
-local math_floor = math.floor
-local table_remove = table.remove
-local string_format = string.format
-
 do
-render.rec = function(x, y, w, h, radius, color)
-radius = math.min(x/2, y/2, radius)
-local r, g, b, a = unpack(color)
-renderer.rectangle(x, y + radius, w, h - radius*2, r, g, b, a)
-renderer.rectangle(x + radius, y, w - radius*2, radius, r, g, b, a)
-renderer.rectangle(x + radius, y + h - radius, w - radius*2, radius, r, g, b, a)
-renderer.circle(x + radius, y + radius, r, g, b, a, radius, 180, 0.25)
-renderer.circle(x - radius + w, y + radius, r, g, b, a, radius, 90, 0.25)
-renderer.circle(x - radius + w, y - radius + h, r, g, b, a, radius, 0, 0.25)
-renderer.circle(x + radius, y - radius + h, r, g, b, a, radius, -90, 0.25)
-end
-
-render.rec_outline = function(x, y, w, h, radius, thickness, color)
-radius = math.min(w/2, h/2, radius)
-local r, g, b, a = unpack(color)
-if radius == 1 then
-renderer.rectangle(x, y, w, thickness, r, g, b, a)
-renderer.rectangle(x, y + h - thickness, w , thickness, r, g, b, a)
-else
-renderer.rectangle(x + radius, y, w - radius*2, thickness, r, g, b, a)
-renderer.rectangle(x + radius, y + h - thickness, w - radius*2, thickness, r, g, b, a)
-renderer.rectangle(x, y + radius, thickness, h - radius*2, r, g, b, a)
-renderer.rectangle(x + w - thickness, y + radius, thickness, h - radius*2, r, g, b, a)
-renderer.circle_outline(x + radius, y + radius, r, g, b, a, radius, 180, 0.25, thickness)
-renderer.circle_outline(x + radius, y + h - radius, r, g, b, a, radius, 90, 0.25, thickness)
-renderer.circle_outline(x + w - radius, y + radius, r, g, b, a, radius, -90, 0.25, thickness)
-renderer.circle_outline(x + w - radius, y + h - radius, r, g, b, a, radius, 0, 0.25, thickness)
-end
-end
-
-render.shadow = function(x, y, w, h, width, rounding, accent, accent_inner)
-local thickness = 1
-local Offset = 1
-local r, g, b, a = unpack(accent)
-if accent_inner then
-render.rec(x, y, w, h + 1, rounding, accent_inner)
-end
-for k = 0, width do
-if a * (k/width)^(1) > 5 then
-local accent = {r, g, b, a * (k/width)^(2)}
-render.rec_outline(x + (k - width - Offset)*thickness, y + (k - width - Offset) * thickness, w - (k - width - Offset)*thickness*2, h + 1 - (k - width - Offset)*thickness*2, rounding + thickness * (width - k + Offset), thickness, accent)
-end
-end
-end
-end
-
-ui_handler.macros = setmetatable({}, {
-__newindex = function (self, key, value) rawset(self, tostring(key), value) end,
-__index = function (self, key) return rawget(self, tostring(key)) end
-})
-
-ui_handler.accent, ui_handler.menu_open = nil, ui.is_menu_open()
-
-do
-local reference = ui.reference("MISC", "Settings", "Menu color")
-ui_handler.accent = utils.rgb_to_hex{ ui.get(reference) }
-local previous = ui_handler.accent
-
-ui.set_callback(reference, function ()
-local color = { ui.get(reference) }
-ui_handler.accent = utils.rgb_to_hex(color)
-
-for idx, ref in next, registry do
-if ref.type == "label" and not ref.__ref then
-local new, count = string.gsub(ref.self.value, previous, ui_handler.accent)
-if count > 0 then
-    ui.set(idx, new)
-    ref.self.value = new
-end
-end
-end
-previous = ui_handler.accent
-client.fire_event("ui_handler::accent_color", color)
-end)
-end
-
-
-ui_handler.group = function (tab, container) return elemence.group(tab, container) end
-
-ui_handler.format = utils.format
-
-ui_handler.reference = function (tab, container, name)
-local found = { contend(ui.reference, 3, tab, container, name) }
-local total, hidden = #found, false
-
--- done on purpose, don't blame me
-if string.lower(tab) == "misc" and string.lower(container) == "settings" then
-for i, v in ipairs(elemence.hidden_refs) do
-if string.find(name, "^" ..v) then hidden = true break end
-end
-end
-
-for i, v in ipairs(found) do
-found[i] = elemence.new(v, {
-__ref = true, __hidden = hidden or nil,
-__tab = tab, __container = container,
-__rage = container == "Aimbot" or nil,
-})
-end
-
-if total > 1 then local shift = 0
-for i = 1, total > 4 and total or 4, 2 do
-local m, j = i - shift, i + 1 - shift
-if found[j] and (found[j].type == "hotkey" or found[j].type == "color_picker") then
-local addition = found[j].type == "color_picker" and "color" or "hotkey"
-registry[ found[m].ref ].__addon, found[m][addition] = addition, found[j]
-
-table.remove(found, j) shift = shift + 1
-end
-end return unpack(found)
-else return found[1] end
-end
-
-ui_handler.traverse = function (t, f, p)
-p = p or {}
-
-if type(t) == "table" and t.__name ~= "ui_handler::element" and t[#t] ~= "~" then
-for k, v in next, t do
-local np = table.copy(p); np[#np+1] = k
-ui_handler.traverse(v, f, np)
-end
-else
-f(t, p)
-end
-end
-
-do
-save = function (config, ...)
-local packed = {}
-
-ui_handler.traverse(dirs.extract(config, {...}), function (ref, path)
-local value
-local etype = registry[ref].type
-
-if etype == "color_picker" then
-value = "#".. utils.rgb_to_hex{ ui.get(ref) }
-elseif etype == "hotkey" then
-local _, mode, key = ui.get(ref)
-value = {mode, key or 0}
-else
-value = ui.get(ref)
-end
-
-if type(value) == "table" then value[#value+1] = "~" end
-dirs.pave(packed, value, path)
-end)
-
-return packed
-end
-
-load = function (config, package, ...)
-if not package then return end
-
-local packed = dirs.extract(package, {...})
-ui_handler.traverse(dirs.extract(config, {...}), function (ref, path)
-pcall(function ()
-local value, proxy = dirs.find(packed, path), registry[ref]
-local vtype, etype = type(value), proxy.type
-local object = elements[etype]
-
-if vtype == "string" and value:sub(1, 1) == "#" then
-    value, vtype = { utils.hex_to_rgb(value) }, "table"
-elseif vtype == "table" and value[#value] == "~" then
-    value[#value] = nil
-end
-
-if etype == "hotkey" and value and type(value[1]) == "number" then
-    value[1] = elements.hotkey.enum[ value[1] ]
-end
-
-if object and object.type == vtype then
-    if vtype == "table" and etype ~= "multiselect" then
-        ui.set(ref, unpack(value))
-        if etype == "color_picker" then methods_mt.element.invoke(proxy.self) end
-    else
-        ui.set(ref, value)
+    utils.rgb_to_hex = function(color)
+        return string.format("%02X%02X%02X%02X", color[1], color[2], color[3], color[4] or 255)
     end
-else
-    if proxy.__init then ui.set(ref, proxy.__init) end
+
+    utils.hex_to_rgb = function(hex)
+        hex = hex:gsub("^#", "")
+        return tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16),
+            tonumber(hex:sub(7, 8), 16) or 255
+    end
+
+    utils.gradient_text = function(text, colors, precision)
+        local symbols, length = {}, #string.gsub(text, ".[\128-\191]*", "a")
+        local s = 1 / (#colors - 1)
+        precision = precision or 1
+
+        local i = 0
+        for letter in string.gmatch(text, ".[\128-\191]*") do
+            i = i + 1
+
+            local weight = i / length
+            local cw = weight / s
+            local j = math.ceil(cw)
+            local w = (cw / j)
+            local L, R = colors[j], colors[j + 1]
+
+            local r = L[1] + (R[1] - L[1]) * w
+            local g = L[2] + (R[2] - L[2]) * w
+            local b = L[3] + (R[3] - L[3]) * w
+            local a = L[4] + (R[4] - L[4]) * w
+
+            symbols[#symbols + 1] = ((i - 1) % precision == 0) and ("\a%02x%02x%02x%02x%s"):format(r, g, b, a, letter) or
+            letter
+        end
+
+        symbols[#symbols + 1] = "\aCDCDCDFF"
+
+        return table.concat(symbols)
+    end
+
+    local gradients = function(col, text)
+        local colors = {}; for w in string.gmatch(col, "\b%x+") do
+            colors[#colors + 1] = { utils.hex_to_rgb(string.sub(w, 2)) }
+        end
+        if #colors > 0 then return utils.gradient_text(text, colors, #text > 8 and 2 or 1) end
+    end
+
+    utils.format = function(s)
+        if type(s) == "string" then
+            s = string.gsub(s, "\f<(.-)>", pui.macros)
+            s = string.gsub(s, "[\v\r\t]", { ["\v"] = "\a" .. pui.accent, ["\r"] = "\aCDCDCDFF", ["\t"] = "    " })
+            s = string.gsub(s, "([\b%x]-)%[(.-)%]", gradients)
+        end
+        return s
+    end
+
+    utils.unpack_color = function(...)
+        local arg = { ... }
+        local kind = type(arg[1])
+
+        if kind == "table" or kind == "cdata" or kind == "userdata" then
+            if arg[1].r then
+                return { arg[1].r, arg[1].g, arg[1].b, arg[1].a }
+            elseif arg[1][1] then
+                return { arg[1][1], arg[1][2], arg[1][3], arg[1][4] }
+            end
+        end
+
+        return arg
+    end
+
+    --#region: dispense
+
+    local dispensers = {
+        color_picker = function(args)
+            args[1] = string.sub(utils.format(args[1]), 1, 117)
+
+            if type(args[2]) ~= "number" then
+                local col = args[2]
+                args.n, args.req, args[2] = args.n + 3, args.req + 3, col.r
+                table.insert(args, 3, col.g)
+                table.insert(args, 4, col.b)
+                table.insert(args, 5, col.a)
+            end
+
+            for i = args.req + 1, args.n do
+                args.misc[i - args.req] = args[i]
+            end
+
+            args.data.__init = { args[2] or 255, args[3] or 255, args[4] or 255, args[5] or 255 }
+        end,
+        listbox = function(args, variable)
+            args[1] = string.sub(utils.format(args[1]), 1, 117)
+            for i = args.req + 1, args.n do
+                args.misc[i - args.req] = args[i]
+            end
+
+            args.data.__init, args.data.__list = 0, not variable and args[2] or { unpack(args, 2, args.n) }
+        end,
+        combobox = function(args, variable)
+            args[1] = string.sub(utils.format(args[1]), 1, 117)
+            for i = args.req + 1, args.n do
+                args.misc[i - args.req] = args[i]
+            end
+
+            args.data.__init, args.data.__list = not variable and args[2][1] or args[2],
+                not variable and args[2] or { unpack(args, 2, args.n) }
+        end,
+        multiselect = function(args, variable)
+            args[1] = string.sub(utils.format(args[1]), 1, 117)
+            for i = args.req + 1, args.n do
+                args.misc[i - args.req] = args[i]
+            end
+
+            args.data.__init, args.data.__list = {}, not variable and args[2] or { unpack(args, 2, args.n) }
+        end,
+        slider = function(args)
+            args[1] = string.sub(utils.format(args[1]), 1, 117)
+
+            for i = args.req + 1, args.n do
+                args.misc[i - args.req] = args[i]
+            end
+
+            args.data.__init = args[4] or args[2]
+        end,
+        button = function(args)
+            args[2] = args[2] or function() end
+            args[1] = string.sub(utils.format(args[1]), 1, 117)
+            args.n, args.data.__callback = 2, args[2]
+        end
+    }
+
+    utils.dispense = function(key, raw, ...)
+        local args, group, ctx = { ... }, {}, elements[key]
+
+        if type(raw) == "table" then
+            group[1], group[2] = raw[1], raw[2]
+            group.__plist = raw.__plist
+        else
+            group[1], group[2] = raw, args[1]
+            table.remove(args, 1)
+        end
+
+        args.n, args.data = table.maxn(args), {
+            __tab = group[1],
+            __container = group[2],
+            __plist = group.__plist and true or nil
+        }
+
+        local variable = (ctx and ctx.variable) and type(args[2]) == "string"
+        args.req, args.misc = not variable and ctx.arg or args.n, {}
+
+        if dispensers[key] then
+            dispensers[key](args, variable)
+        else
+            for i = 1, args.n do
+                if type(args[i]) == "string" then
+                    args[i] = string.sub(utils.format(args[i]), 1, 117)
+                end
+
+                if i > args.req then args.misc[i - args.req] = args[i] end
+            end
+            args.data.__init = ctx.init
+        end
+
+        return args, group
+    end
+
+    --#endregion
 end
-end)
-end)
-end
+
+--#endregion
+
+-- #endregion
+--
+
+
+-- #endregion -----------------------------------------------------------
+--
+
+
+-------------------------------------------------------------------------
+-- #region :: pui
+
 
 --
-local package_mt = {
-__type = "ui_handler::package", __metatable = false,
-__call = function (self, raw, ...)
-return (type(raw) == "table" and load or save)(self[0], raw, ...)
-end,
-save = function (self, ...) return save(self[0], ...) end,
-load = function (self, ...) load(self[0], ...) end,
-}	package_mt.__index = package_mt
+-- #region : pui
 
-ui_handler.setup = function (t)
-local package = { [0] = {} }
-ui_handler.traverse(t, function (r, p) elemence.memorize(r, p, package[0]) end)
-return setmetatable(package, package_mt)
+--#region: variables
+
+pui.macros = setmetatable({}, {
+    __newindex = function(self, key, value) rawset(self, tostring(key), value) end,
+    __index = function(self, key) return rawget(self, tostring(key)) end
+})
+
+pui.accent, pui.menu_open = nil, ui.is_menu_open()
+
+do
+    local reference = ui.reference("MISC", "Settings", "Menu color")
+    pui.accent = utils.rgb_to_hex { ui.get(reference) }
+    local previous = pui.accent
+
+    ui.set_callback(reference, function()
+        local color = { ui.get(reference) }
+        pui.accent = utils.rgb_to_hex(color)
+
+        for idx, ref in next, registry do
+            if ref.type == "label" and not ref.__ref then
+                local new, count = string.gsub(ref.self.value, previous, pui.accent)
+                if count > 0 then
+                    ui.set(idx, new)
+                    ref.self.value = new
+                end
+            end
+        end
+        previous = pui.accent
+        client.fire_event("pui::accent_color", color)
+    end)
 end
+
+client.set_event_callback("paint_ui", function()
+    local state = ui.is_menu_open()
+    if state ~= pui.menu_open then
+        client.fire_event("pui::menu_state", state)
+        pui.menu_open = state
+    end
+end)
+
+--#endregion
+
+--#region: features
+
+pui.group = function(tab, container) return elemence.group(tab, container) end
+
+pui.format = utils.format
+
+pui.reference = function(tab, container, name)
+    local found = { contend(ui.reference, 3, tab, container, name) }
+    local total, hidden = #found, false
+
+    -- done on purpose, don't blame me
+    if string.lower(tab) == "misc" and string.lower(container) == "settings" then
+        for i, v in ipairs(elemence.hidden_refs) do
+            if string.find(name, "^" .. v) then
+                hidden = true
+                break
+            end
+        end
+    end
+
+    for i, v in ipairs(found) do
+        found[i] = elemence.new(v, {
+            __ref = true,
+            __hidden = hidden or nil,
+            __tab = tab,
+            __container = container,
+            __rage = container == "Aimbot" or nil,
+        })
+    end
+
+    if total > 1 then
+        local shift = 0
+        for i = 1, total > 4 and total or 4, 2 do
+            local m, j = i - shift, i + 1 - shift
+            if found[j] and (found[j].type == "hotkey" or found[j].type == "color_picker") then
+                local addition = found[j].type == "color_picker" and "color" or "hotkey"
+                registry[found[m].ref].__addon, found[m][addition] = addition, found[j]
+
+                table.remove(found, j)
+                shift = shift + 1
+            end
+        end
+        return unpack(found)
+    else
+        return found[1]
+    end
 end
+
+pui.traverse = function(t, f, p)
+    p = p or {}
+
+    if type(t) == "table" and t.__name ~= "pui::element" and t[#t] ~= "~" then
+        for k, v in next, t do
+            local np = table.copy(p); np[#np + 1] = k
+            pui.traverse(v, f, np)
+        end
+    else
+        f(t, p)
+    end
+end
+
+--#endregion
+
+--#region: config system
+
+do
+    local save = function(config, ...)
+        local packed = {}
+
+        pui.traverse(dirs.extract(config, { ... }), function(ref, path)
+            local value
+            local etype = registry[ref].type
+
+            if etype == "color_picker" then
+                value = "#" .. utils.rgb_to_hex { ui.get(ref) }
+            elseif etype == "hotkey" then
+                local _, mode, key = ui.get(ref)
+                value = { mode, key or 0 }
+            else
+                value = ui.get(ref)
+            end
+
+            if type(value) == "table" then value[#value + 1] = "~" end
+            dirs.pave(packed, value, path)
+        end)
+
+        return packed
+    end
+
+    local load = function(config, package, ...)
+        if not package then return end
+
+        local packed = dirs.extract(package, { ... })
+        pui.traverse(dirs.extract(config, { ... }), function(ref, path)
+            local value, proxy = dirs.find(packed, path), registry[ref]
+            local vtype, etype = type(value), proxy.type
+            local object = elements[etype]
+
+            if vtype == "string" and value:sub(1, 1) == "#" then
+                value, vtype = { utils.hex_to_rgb(value) }, "table"
+            elseif vtype == "table" and value[#value] == "~" then
+                value[#value] = nil
+            end
+
+            if etype == "hotkey" and value and type(value[1]) == "number" then
+                value[1] = elements.hotkey.enum[value[1]]
+            end
+
+            local s, r = pcall(function()
+                if object and object.type == vtype then
+                    if vtype == "table" and etype ~= "multiselect" then
+                        ui.set(ref, unpack(value))
+                        if etype == "color_picker" then methods_mt.element.invoke(proxy.self) end
+                    else
+                        ui.set(ref, value)
+                    end
+                else
+                    if proxy.__init then ui.set(ref, proxy.__init) end
+                end
+            end)
+
+            -- if not s then printf("failed to set %s to %s  [%s]", value, proxy.self, r) end
+        end)
+    end
+
+    --
+    local package_mt = {
+        __type = "pui::package",
+        __metatable = false,
+        __call = function(self, raw, ...)
+            return (type(raw) == "table" and load or save)(self[0], raw, ...)
+        end,
+        save = function(self, ...) return save(self[0], ...) end,
+        load = function(self, ...) load(self[0], ...) end,
+    }
+    package_mt.__index = package_mt
+
+    pui.setup = function(t)
+        local package = { [0] = {} }
+        pui.traverse(t, function(r, p) elemence.memorize(r, p, package[0]) end)
+        return setmetatable(package, package_mt)
+    end
+end
+
+--#endregion
+
+-- #endregion
+--
+
+--
+-- #region : methods
 
 methods_mt.element = {
-__type = "ui_handler::element", __name = "ui_handler::element", __metatable = false,
-__eq = function (this, that) return this.ref == that.ref end,
-__tostring = function (self) return string.format('ui_handler.%s[%d] "%s"', self.type, self.ref, self.name) end,
-__call = function (self, ...) if #{...} > 0 then ui.set(self.ref, ...) else return ui.get(self.ref) end end,
+    __type = "pui::element",
+    __name = "pui::element",
+    __metatable = false,
+    __eq = function(this, that) return this.ref == that.ref end,
+    __tostring = function(self) return string.format('pui.%s[%d] "%s"', self.type, self.ref, self.name) end,
+    __call = function(self, ...) if #{ ... } > 0 then ui.set(self.ref, ...) else return ui.get(self.ref) end end,
 
-depend = function (self, ...)
-local arg = {...}
-local disabler = arg[1] == true
+    --
 
-local depend = registry[self.ref].depend[disabler and 2 or 1]
-local this = registry[self.ref].depend[0]
+    depend = function(self, ...)
+        local arg = { ... }
+        local disabler = arg[1] == true
 
-for i = (disabler and 2 or 1), table.maxn(arg) do
-local v = arg[i]
-if v then
-if v.__name == "ui_handler::element" then v = {v, true} end
-depend[#depend+1] = v
+        local depend = registry[self.ref].depend[disabler and 2 or 1]
+        local this = registry[self.ref].depend[0]
 
-local check = function () elemence.dependant(depend, this, disabler) end
-check()
+        for i = (disabler and 2 or 1), table.maxn(arg) do
+            local v = arg[i]
+            if v then
+                if v.__name == "pui::element" then v = { v, true } end
+                depend[#depend + 1] = v
 
-registry[v[1].ref].callbacks[#registry[v[1].ref].callbacks+1] = check
-end
-end
+                local check = function() elemence.dependant(depend, this, disabler) end
+                check()
 
-return self
-end,
+                registry[v[1].ref].callbacks[#registry[v[1].ref].callbacks + 1] = check
+            end
+        end
 
-override = function (self, value)
-local is_hk = self.type == "hotkey"
-local ctx, wctx = registry[self.ref], ragebot.context[ragebot.ref.value]
+        return self
+    end,
 
-if value ~= nil then
-if not ctx.overridden then
-if is_hk then self.value = { ui.get(self.ref) } end
-if ctx.__rage then wctx[self.ref] = self.value else ctx.original = self.value end
-end ctx.overridden = true
-if is_hk then ui.set(self.ref, value[1], value[2]) else ui.set(self.ref, value) end
-if ctx.__rage then ctx.__ovr_v = value end
-else
-if ctx.overridden then
-local original = ctx.original if ctx.__rage then original, ctx.__ovr_v = wctx[self.ref], nil end
-if is_hk then ui.set(self.ref, elements.hotkey.enum[original[2]], original[3] or 0)
-else ui.set(self.ref, original) end ctx.overridden = false
-end
-end
-end,
-get_original = function (self)
-if registry[self.ref].__rage then
-if registry[self.ref].overridden then return ragebot.context[ragebot.ref.value][self.ref] else return self.value end
-else
-if registry[self.ref].overridden then return registry[self.ref].original else return self.value end
-end
-end,
+    override = function(self, value)
+        local is_hk = self.type == "hotkey"
+        local ctx, wctx = registry[self.ref], ragebot.context[ragebot.ref.value]
 
-set = function (self, ...)
-if self.type == "color_picker" then
-ui.set(self.ref, unpack(utils.unpack_color(...)) )
-methods_mt.element.invoke(self)
-elseif self.type == "label" then
-local t = utils.format(...)
-ui.set(self.ref, t)
-self.value = t
-else
-ui.set(self.ref, ...)
-end
-end,
-get = function (self, value)
-if value and self.type == "multiselect" then
-return registry[self.ref].options[value] or false
-end
-return ui.get(self.ref)
-end,
+        if value ~= nil then
+            if not ctx.overridden then
+                if is_hk then self.value = { ui.get(self.ref) } end
+                if ctx.__rage then wctx[self.ref] = self.value else ctx.original = self.value end
+            end
+            ctx.overridden = true
+            if is_hk then ui.set(self.ref, value[1], value[2]) else ui.set(self.ref, value) end
+            if ctx.__rage then ctx.__ovr_v = value end
+        else
+            if ctx.overridden then
+                local original = ctx.original
+                if ctx.__rage then original, ctx.__ovr_v = wctx[self.ref], nil end
+                if is_hk then
+                    ui.set(self.ref, elements.hotkey.enum[original[2]], original[3] or 0)
+                else
+                    ui.set(self.ref, original)
+                end
+                ctx.overridden = false
+            end
+        end
+    end,
+    get_original = function(self)
+        if registry[self.ref].__rage then
+            if registry[self.ref].overridden then return ragebot.context[ragebot.ref.value][self.ref] else return self
+                .value end
+        else
+            if registry[self.ref].overridden then return registry[self.ref].original else return self.value end
+        end
+    end,
 
-reset = function (self) if registry[self.ref].__init then ui.set(self.ref, registry[self.ref].__init) end end,
+    --
 
-update = function (self, t)
-ui.update(self.ref, t)
-registry[self.ref].__list = t
+    set = function(self, ...)
+        if self.type == "color_picker" then
+            ui.set(self.ref, unpack(utils.unpack_color(...)))
+            methods_mt.element.invoke(self)
+        elseif self.type == "label" then
+            local t = utils.format(...)
+            ui.set(self.ref, t)
+            self.value = t
+        else
+            ui.set(self.ref, ...)
+        end
+    end,
+    get = function(self, value)
+        if value and self.type == "multiselect" then
+            return registry[self.ref].options[value] or false
+        end
+        return ui.get(self.ref)
+    end,
 
-local cap = #t-1
---if ui.get(self.ref) > cap then ui.set(self.ref, cap) end
-end,
+    reset = function(self) if registry[self.ref].__init then ui.set(self.ref, registry[self.ref].__init) end end,
 
-get_list = function (self) return registry[self.ref].__list end,
+    update = function(self, t)
+        ui.update(self.ref, t)
+        registry[self.ref].__list = t
 
-get_color = function (self)
-if registry[self.ref].__addon then return ui.get(self.color.ref) end
-end,
-set_color = function (self, ...)
-if registry[self.ref].__addon then methods_mt.element.set(self.color, ...) end
-end,
-get_hotkey = function (self)
-if registry[self.ref].__addon then return ui.get(self.hotkey.ref) end
-end,
-set_hotkey = function (self, ...)
-if registry[self.ref].__addon then methods_mt.element.set(self.hotkey, ...) end
-end,
+        local cap = #t - 1
+        if ui.get(self.ref) > cap then ui.set(self.ref, cap) end
+    end,
+    get_list = function(self) return registry[self.ref].__list end,
 
-is_reference = function (self) return registry[self.ref].__ref or false end,
-get_type = function (self) return self.type end,
-get_name = function (self) return self.name end,
+    get_color = function(self)
+        if registry[self.ref].__addon then return ui.get(self.color.ref) end
+    end,
+    set_color = function(self, ...)
+        if registry[self.ref].__addon then methods_mt.element.set(self.color, ...) end
+    end,
+    get_hotkey = function(self)
+        if registry[self.ref].__addon then return ui.get(self.hotkey.ref) end
+    end,
+    set_hotkey = function(self, ...)
+        if registry[self.ref].__addon then methods_mt.element.set(self.hotkey, ...) end
+    end,
 
-set_visible = function (self, visible)
-ui.set_visible(self.ref, visible)
-if registry[self.ref].__addon then ui.set_visible(self[registry[self.ref].__addon].ref, visible) end
-end,
-set_enabled = function (self, enabled)
-ui.set_enabled(self.ref, enabled)
-if registry[self.ref].__addon then ui.set_enabled(self[registry[self.ref].__addon].ref, enabled) end
-end,
+    is_reference = function(self) return registry[self.ref].__ref or false end,
+    get_type = function(self) return self.type end,
+    get_name = function(self) return self.name end,
 
-set_callback = function (self, func, once)
-if once == true then func(self) end
-registry[self.ref].callbacks[#registry[self.ref].callbacks+1] = func
-end,
-unset_callback = function (self, func)
-table.remove(registry[self.ref].callbacks, table.qfind(registry[self.ref].callbacks, func) or 0)
-end,
-invoke = function (self, ...)
-for i = 0, #registry[self.ref].callbacks do registry[self.ref].callbacks[i](self, ...) end
-end,
+    set_visible = function(self, visible)
+        ui.set_visible(self.ref, visible)
+        if registry[self.ref].__addon then ui.set_visible(self[registry[self.ref].__addon].ref, visible) end
+    end,
+    set_enabled = function(self, enabled)
+        ui.set_enabled(self.ref, enabled)
+        if registry[self.ref].__addon then ui.set_enabled(self[registry[self.ref].__addon].ref, enabled) end
+    end,
 
-set_event = function (self, event, func, condition)
-local slot = registry[self.ref]
-if condition == nil then condition = true end
-local is_cond_fn, latest = type(condition) == "function", nil
-slot.events[func] = function (this)
-local permission if is_cond_fn then permission = condition(this) else permission = this.value == condition end
+    set_callback = function(self, func, once)
+        if once == true then func(self) end
+        registry[self.ref].callbacks[#registry[self.ref].callbacks + 1] = func
+    end,
+    unset_callback = function(self, func)
+        table.remove(registry[self.ref].callbacks, table.qfind(registry[self.ref].callbacks, func) or 0)
+    end,
+    invoke = function(self, ...)
+        for i = 0, #registry[self.ref].callbacks do registry[self.ref].callbacks[i](self, ...) end
+    end,
 
-local action = permission and client.set_event_callback or client.unset_event_callback
-if latest ~= permission then action(event, func) latest = permission end
-end
-slot.events[func](self)
-slot.callbacks[#slot.callbacks+1] = slot.events[func]
-end,
-unset_event = function (self, event, func)
-client.unset_event_callback(event, func)
-methods_mt.element.unset_callback(self, registry[self.ref].events[func])
-registry[self.ref].events[func] = nil
-end,
+    set_event = function(self, event, func, condition)
+        local slot = registry[self.ref]
+        if condition == nil then condition = true end
+        local is_cond_fn, latest = type(condition) == "function", nil
+        slot.events[func] = function(this)
+            local permission
+            if is_cond_fn then permission = condition(this) else permission = this.value == condition end
 
-get_location = function (self) return registry[self.ref].tab, registry[self.ref].container end,
-}	methods_mt.element.__index = methods_mt.element
+            local action = permission and client.set_event_callback or client.unset_event_callback
+            if latest ~= permission then
+                action(event, func)
+                latest = permission
+            end
+        end
+        slot.events[func](self)
+        slot.callbacks[#slot.callbacks + 1] = slot.events[func]
+    end,
+    unset_event = function(self, event, func)
+        client.unset_event_callback(event, func)
+        methods_mt.element.unset_callback(self, registry[self.ref].events[func])
+        registry[self.ref].events[func] = nil
+    end,
+
+    get_location = function(self) return registry[self.ref].tab, registry[self.ref].container end,
+}
+methods_mt.element.__index = methods_mt.element
 
 methods_mt.group = {
-__name = "ui_handler::group",
-__metatable = false,
-__index = function (self, key) return rawget(methods_mt.group, key) or ui_handler_mt.__index(self, key) end,
-get_location = function (self) return self[1], self[2] end
+    __name = "pui::group",
+    __metatable = false,
+    __index = function(self, key) return rawget(methods_mt.group, key) or pui_mt.__index(self, key) end,
+    get_location = function(self) return self[1], self[2] end
 }
 
+-- #endregion
+--
+
+--
+-- #region : pui_mt, ragebot and plist handler
+
 do
-for k, v in next, elements do
-v.fn = function (origin, ...)
-local args, group = utils.dispense(k, origin, ...)
-local this = elemence.new( contend(ui["new_".. k], 3, group[1], group[2], unpack(args, 1, args.n < args.req and args.n or args.req)), args.data )
+    for k, v in next, elements do
+        v.fn = function(origin, ...)
+            local args, group = utils.dispense(k, origin, ...)
+            local this = elemence.new(
+            contend(ui["new_" .. k], 3, group[1], group[2], unpack(args, 1, args.n < args.req and args.n or args.req)),
+                args.data)
 
-elemence.features(this, args.misc)
-return this
-end
+            elemence.features(this, args.misc)
+            return this
+        end
+    end
+
+    pui_mt.__name, pui_mt.__metatable = "pui::basement", false
+    pui_mt.__index = function(self, key)
+        if not elements[key] then return ui[key] end
+        if key == "string" then return elemence.string end
+
+        return elements[key].fn
+    end
 end
 
-ui_handler_mt.__name, ui_handler_mt.__metatable = "ui_handler::basement", false
-ui_handler_mt.__index = function (self, key)
-if not elements[key] then return ui[key] end
-if key == "string" then return elemence.string end
 
-return elements[key].fn
-end
-end
+--#region: ragebot handler
 
 ragebot = {
-ref = ui_handler.reference("RAGE", "Weapon type", "Weapon type"),
-context = {}, cache = {},
-silent = false,
-} do
-local previous, cycle_action = ragebot.ref.value, nil
-for i, v in ipairs(weapons) do ragebot.context[v], ragebot.cache[v] = {}, {} end
+    ref = pui.reference("RAGE", "Weapon type", "Weapon type"),
+    context = {},
+    cache = {},
+    silent = false,
+}
+do
+    local previous, cycle_action = ragebot.ref.value, nil
+    for i, v in ipairs(weapons) do ragebot.context[v], ragebot.cache[v] = {}, {} end
 
-local neutral = ui.reference("RAGE", "Aimbot", "Enabled")
-ui.set_callback(neutral, function ()
-if not ragebot.silent then client.delay_call(0, client.fire_event, "ui_handler::adaptive_weapon", ragebot.ref.value, previous) end
-if cycle_action then cycle_action(ragebot.ref.value) end
-end)
+    local neutral = ui.reference("RAGE", "Aimbot", "Enabled")
+    ui.set_callback(neutral, function()
+        if not ragebot.silent then client.delay_call(0, client.fire_event, "pui::adaptive_weapon", ragebot.ref.value,
+                previous) end
+        if cycle_action then cycle_action(ragebot.ref.value) end
+    end)
 
-ragebot.cycle = function (fn, mute)
-cycle_action = mute and fn or nil
-ragebot.silent = mute and true or false
+    ragebot.cycle = function(fn, mute)
+        cycle_action = mute and fn or nil
+        ragebot.silent = mute and true or false
 
-for i, v in ipairs(weapons) do
-ragebot.ref:override(v)
+        for i, v in ipairs(weapons) do
+            ragebot.ref:override(v)
+        end
+
+        ragebot.ref:override()
+        cycle_action, ragebot.silent = nil, false
+    end
+
+    ui.set_callback(ragebot.ref.ref, function(self)
+        ragebot.ref.value = ui.get(self)
+
+        if not ragebot.silent and previous ~= ragebot.ref.value then
+            for i = 1, #registry[self].callbacks, 1 do registry[self].callbacks[i](ragebot.ref) end
+        end
+
+        previous = ragebot.ref.value
+    end)
+
+    ragebot.memorize = function(self)
+        local ctx = ragebot.context[ragebot.ref.value]
+
+        if registry[self.ref].overridden then
+            if ctx[self.ref] == nil then
+                ctx[self.ref] = self.value
+                -- methods_mt.element.override(self, registry[self.ref].__ovr_v)
+            end
+        else
+            if ctx[self.ref] then
+                methods_mt.element.set(self, ctx[self.ref])
+                ctx[self.ref] = nil
+            end
+        end
+    end
 end
 
-ragebot.ref:override()
-cycle_action, ragebot.silent = nil, false
-end
+--#endregion
 
-ui.set_callback(ragebot.ref.ref, function (self)
-ragebot.ref.value = ui.get(self)
-
-if not ragebot.silent and previous ~= ragebot.ref.value then
-for i = 1, #registry[self].callbacks, 1 do registry[self].callbacks[i](ragebot.ref) end
-end
-
-previous = ragebot.ref.value
-end)
-
-ragebot.memorize = function (self)
-local ctx = ragebot.context[ragebot.ref.value]
-
-if registry[self.ref].overridden then
-if ctx[self.ref] == nil then
-ctx[self.ref] = self.value
-methods_mt.element.override(self, registry[self.ref].__ovr_v)
-end
-else
-if ctx[self.ref] then
-methods_mt.element.set(self, ctx[self.ref])
-ctx[self.ref] = nil
-end
-end
-end
-end
+--#region: plist handler
 
 players = {
-elements = {}, list = {},
-} do
-
-ui_handler.plist = elemence.group("PLAYERS", "Adjustments")
-ui_handler.plist.__plist = true
-
-local selected = 0
-local refs, slot = {
-list = ui_handler.reference("PLAYERS", "Players", "Player list"),
-reset = ui_handler.reference("PLAYERS", "Players", "Reset all"),
-apply = ui_handler.reference("PLAYERS", "Adjustments", "Apply to all"),
-}, {}
-
-local slot_mt = {
-__type = "ui_handler::player_slot", __metatable = false,
-__tostring = function (self)
-return string.format("ui_handler::player_slot[%d] of %s", self.idx, methods_mt.element.__tostring(registry[self.ref].self))
-end,
-set = function (self, ...) -- don't mind
-local ctx, value = registry[self.ref], {...}
-
-local is_colorpicker = ctx.type == "color_picker"
-if is_colorpicker then
-value = utils.unpack_color(...)
-end
-
-if self.idx == selected then
-ui.set( self.ref, unpack(value) )
-if is_colorpicker then
-    methods_mt.element.invoke(ctx.self)
-end
-else
-self.value = is_colorpicker and value or unpack(value)
-end
-end,
-get = function (self, find)
-if find and registry[self.ref].type == "multiselect" then
-return table.qfind(self.value, find) ~= nil
-end
-
-if registry[self.ref].type ~= "color_picker" then return self.value
-else return unpack(self.value) end
-end,
-}	slot_mt.__index = slot_mt
-
-players.traverse = function (fn) for i, v in ipairs(players.elements) do fn(v) end end
-
-slot = {
-select = function (idx)
-for i, v in ipairs(players.elements) do
-methods_mt.element.set(v, v[idx].value)
-end
-end,
-add = function (idx)
-for i, v in ipairs(players.elements) do
-local default = ternary(registry[v.ref].__init ~= nil, registry[v.ref].__init, v.value)
-v[idx], players.list[idx] = setmetatable({
-    ref = v.ref, idx = idx, value = default
-}, slot_mt), true
-end
-end,
-remove = function (idx)
-for i, v in ipairs(players.elements) do
-v[idx], players.list[idx] = nil, nil
-end
-end,
+    elements = {}, list = {},
 }
-
-players.slot_update = function (self)
-if self[selected] then self[selected].value = self.value
-else slot.add(selected) end
-end
-
-local silent = false
-update = function (e)
-selected = ui.get(refs.list.ref)
-
-local new, old = entity.get_players(), players.list
-local me = entity.get_local_player()
-
-for idx, v in next, old do
-if entity.get_classname(idx) ~= "CCSPlayer" then
-slot.remove(idx)
-end
-end
-
-for i, idx in ipairs(new) do
-if idx ~= me and not players.list[idx] and entity.get_classname(idx) == "CCSPlayer" then
-slot.add(idx)
-end
-end
-
-if not silent and not e.value then
-for i = #new, 1, -1 do
-if new[i] ~= me then ui.set(refs.list.ref, new[i]) break end
-end
-client.update_player_list()
-silent = true
-else
-silent = false
-end
-
-slot.select(selected)
-client.fire_event("ui_handler::plist_update", selected)
-end
-
 do
-local function once ()
-update{}
-client.unset_event_callback("pre_render", once)
-end
-client.set_event_callback("pre_render", once)
-end
-end
+    --#region: stuff
 
-local steam_name = panorama.open("CSGOHud").MyPersonaAPI.GetName()
+    pui.plist = elemence.group("PLAYERS", "Adjustments")
+    pui.plist.__plist = true
 
-local js = panorama.open()
+    local selected = 0
+    local refs, slot = {
+        list = pui.reference("PLAYERS", "Players", "Player list"),
+        reset = pui.reference("PLAYERS", "Players", "Reset all"),
+        apply = pui.reference("PLAYERS", "Adjustments", "Apply to all"),
+    }, {}
 
-MyPersonaAPI, LobbyAPI, PartyListAPI, SteamOverlayAPI = js.MyPersonaAPI, js.LobbyAPI, js.PartyListAPI, js.SteamOverlayAPI
+    --#endregion
 
-img,
-files,
-widgets,
-presets,
-protected,
-animations,
-shot_logger,
-aero_lag_exp,
-chat_spammer,
-death_spammer,
-model_breaker,
-config_system,
-gamesense_refs,
-antiaim_on_use,
-anti_bruteforce,
-crosshair_logger,
-screen_indication,
-manual_indication,
-conditional_antiaims,
-expres1 = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+    --#region: slot metatable
 
-ffi.cdef[[
-void* __stdcall URLDownloadToFileA(void* LPUNKNOWN, const char* LPCSTR, const char* LPCSTR2, int a, int LPBINDSTATUSCALLBACK);  
-bool DeleteUrlCacheEntryA(const char* lpszUrlName);
-]]
+    local slot_mt = {
+        __type = "pui::player_slot",
+        __metatable = false,
+        __tostring = function(self)
+            return string.format("pui::player_slot[%d] of %s", self.idx,
+                methods_mt.element.__tostring(registry[self.ref].self))
+        end,
+        set = function(self, ...) -- don't mind
+            local ctx, value = registry[self.ref], { ... }
 
-local ffi_helpers do
-    ffi_helpers = {} do
-        ffi_helpers.get_client_entity = vtable_bind('client.dll', 'VClientEntityList003', 3, 'void*(__thiscall*)(void***, int)')
-
-        ffi_helpers.animlayers = {} do
-            if not pcall(ffi.typeof, 'bt_animlayer_t') then
-                ffi.cdef[[
-                    typedef struct {
-                        float   anim_time;
-                        float   fade_out_time;
-                        int     nil;
-                        int     activty;
-                        int     priority;
-                        int     order;
-                        int     sequence;
-                        float   prev_cycle;
-                        float   weight;
-                        float   weight_delta_rate;
-                        float   playback_rate;
-                        float   cycle;
-                        int     owner;
-                        int     bits;
-                    } bt_animlayer_t, *pbt_animlayer_t
-                ]]
+            local is_colorpicker = ctx.type == "color_picker"
+            if is_colorpicker then
+                value = utils.unpack_color(...)
             end
 
-            ffi_helpers.animlayers.offset = ffi.cast('int*', ffi.cast('uintptr_t', client.find_signature('client.dll', '\x8B\x89\xCC\xCC\xCC\xCC\x8D\x0C\xD1')) + 2)[0]
-
-            ffi_helpers.animlayers.get = function (self, ent)
-                local client_entity = ffi_helpers.get_client_entity(ent)
-
-                if not client_entity then
-                    return
+            if self.idx == selected then
+                ui.set(self.ref, unpack(value))
+                if is_colorpicker then
+                    methods_mt.element.invoke(ctx.self)
                 end
-
-                return ffi.cast('pbt_animlayer_t*', ffi.cast('uintptr_t', client_entity) + self.offset)[0]
+            else
+                self.value = is_colorpicker and value or unpack(value)
             end
-        end
-
-        ffi_helpers.activity = {} do
-            if not pcall(ffi.typeof, 'bt_get_sequence') then
-                ffi.cdef[[
-                    typedef int(__fastcall* bt_get_sequence)(void* entity, void* studio_hdr, int sequence);
-                ]]
+        end,
+        get = function(self, find)
+            if find and registry[self.ref].type == "multiselect" then
+                return table.qfind(self.value, find) ~= nil
             end
 
-            ffi_helpers.activity.offset = 0x2950
-            ffi_helpers.activity.location = ffi.cast('bt_get_sequence', client.find_signature('client.dll', '\x55\x8B\xEC\x53\x8B\x5D\x08\x56\x8B\xF1\x83'))
-
-            ffi_helpers.activity.get = function (self, sequence, ent)
-                if ent == nil then return end
-                local client_entity = ffi_helpers.get_client_entity(ent)
-
-                if not client_entity then
-                    return
-                end
-
-                local studio_hdr = ffi.cast('void**', ffi.cast('uintptr_t', client_entity) + self.offset)[0]
-
-                if not studio_hdr then
-                    return;
-                end
-
-                return self.location(client_entity, studio_hdr, sequence);
+            if registry[self.ref].type ~= "color_picker" then
+                return self.value
+            else
+                return unpack(self.value)
             end
+        end,
+    }
+    slot_mt.__index = slot_mt
+
+    --#endregion
+
+    --#region: slots handling stuff
+
+    players.traverse = function(fn) for i, v in ipairs(players.elements) do fn(v) end end
+
+    slot = {
+        select = function(idx)
+            if not idx then return end
+            for i, v in ipairs(players.elements) do
+                methods_mt.element.set(v, v[idx].value)
+            end
+        end,
+        add = function(idx)
+            if not idx then return end
+            for i, v in ipairs(players.elements) do
+                local default = ternary(registry[v.ref].__init ~= nil, registry[v.ref].__init, v.value)
+                v[idx], players.list[idx] = setmetatable({
+                    ref = v.ref, idx = idx, value = default
+                }, slot_mt), true
+            end
+        end,
+        remove = function(idx)
+            if not idx then return end
+            for i, v in ipairs(players.elements) do
+                v[idx], players.list[idx] = nil, nil
+            end
+        end,
+    }
+
+    players.slot_update = function(self)
+        if self[selected] then
+            self[selected].value = self.value
+        else
+            slot.add(selected)
         end
     end
+
+    --#endregion
+
+    --#region: callbacks
+
+    local silent = false
+    local update = function(e)
+        selected = ui.get(refs.list.ref)
+
+        local new, old = entity.get_players(), players.list
+        local me = entity.get_local_player()
+
+        for idx, v in next, old do
+            if entity.get_classname(idx) ~= "CCSPlayer" then
+                slot.remove(idx)
+            end
+        end
+
+        for i, idx in ipairs(new) do
+            if idx ~= me and not players.list[idx] and entity.get_classname(idx) == "CCSPlayer" then
+                slot.add(idx)
+            end
+        end
+
+        if not silent and not e.value then
+            for i = #new, 1, -1 do
+                if new[i] ~= me then
+                    ui.set(refs.list.ref, new[i])
+                    break
+                end
+            end
+            client.update_player_list()
+            silent = true
+        else
+            silent = false
+        end
+
+        slot.select(selected)
+        client.fire_event("pui::plist_update", selected)
+    end
+
+    do
+        local function once()
+            update {}
+            client.unset_event_callback("pre_render", once)
+        end
+        client.set_event_callback("pre_render", once)
+    end
+    methods_mt.element.set_callback(refs.list, update, true)
+    client.set_event_callback("player_connect_full", update)
+    client.set_event_callback("player_disconnect", update)
+    client.set_event_callback("player_spawned", update)
+    client.set_event_callback("player_spawn", update)
+    client.set_event_callback("player_death", update)
+    client.set_event_callback("player_team", update)
+
+    --
+
+    methods_mt.element.set_callback(refs.apply, function()
+        players.traverse(function(v)
+            for idx, _ in next, players.list do
+                v[idx].value = v[selected].value
+            end
+        end)
+    end)
+    methods_mt.element.set_callback(refs.reset, function()
+        players.traverse(function(v)
+            for idx, _ in next, players.list do
+                if idx == selected then
+                    slot_mt.set(v[idx], registry[v.ref].__init)
+                else
+                    v[idx].value = registry[v.ref].__init
+                end
+            end
+        end)
+    end)
+
+    --#endregion
 end
 
-local gram_create = function(value, count) local gram = { }; for i=1, count do gram[i] = value; end return gram; end
-local gram_update = function(tab, value, forced) local new_tab = tab; if forced or new_tab[#new_tab] ~= value then table.insert(new_tab, value); table.remove(new_tab, 1); end; tab = new_tab; end
-local get_average = function(tab) local elements, sum = 0, 0; for k, v in pairs(tab) do sum = sum + v; elements = elements + 1; end return sum / elements; end
+local pui = setmetatable(pui, pui_mt)
 
-local breaker = {
-    -- defensive = 0,
-    -- defensive_check = 0,
-    -- cmd = 0,
-    last_origin = nil,
-    origin = nil,
-    tp_dist = 0,
-    tp_data = gram_create(0,3),
-    mapname = globals.mapname()
-}
+local vector = require('vector')
+local clipboard = require("gamesense/clipboard")
+local base64 = require("gamesense/base64")
+local adata = require("gamesense/antiaim_funcs")
+local c_entity = require("gamesense/entity")
+local csgo_weapons = require("gamesense/csgo_weapons")
+local hitgroup_names = {"generic", "head", "chest", "stomach", "left arm", "right arm", "left leg", "right leg", "neck", "?", "gear"}
 
+local gratio = 1.6180339887
+math.clamp = function (x, a, b) if a > x then return a elseif b < x then return b else return x end end
+math.lerp = function (a, b, w)  return a + (b - a) * w  end
 
+if(database.read("peremogaboiii.base") == nil) then
+    local base = {
+        name = {"empty config"},
+        cfg = {""}
+    }
+    database.write("peremogaboiii.base", base)
+end
 
-------@ref
-
-gamesense_refs.prefer_safe_point = ui.reference('RAGE', 'Aimbot', 'Prefer safe point')
-gamesense_refs.force_safe_point = ui.reference('RAGE', 'Aimbot', 'Force safe point')
+local base = database.read("peremogaboiii.base")
 
 local ref = {
-    enabled = ui.reference('AA', 'Anti-aimbot angles', 'Enabled'),
-    yawbase = ui.reference('AA', 'Anti-aimbot angles', 'Yaw base'),
-    fsbodyyaw = ui.reference('AA', 'anti-aimbot angles', 'Freestanding body yaw'),
-    edgeyaw = ui.reference('AA', 'Anti-aimbot angles', 'Edge yaw'),
-    fakeduck = ui.reference('RAGE', 'Other', 'Duck peek assist'),
-    forcebaim = ui.reference('RAGE', 'Aimbot', 'Force body aim'),
-    safepoint = ui.reference('RAGE', 'Aimbot', 'Force safe point'),
-    roll = { ui.reference('AA', 'Anti-aimbot angles', 'Roll') },
-    clantag = ui.reference('Misc', 'Miscellaneous', 'Clan tag spammer'),
+    aimbot = pui.reference('RAGE', 'Aimbot', 'Enabled'),
+	enabled = pui.reference("AA", "Anti-aimbot angles", "Enabled"),
+	pitch = {pui.reference("AA", "Anti-aimbot angles", "pitch")},
+	yawbase = pui.reference("AA", "Anti-aimbot angles", "Yaw base"),
+	yaw = {pui.reference("AA", "Anti-aimbot angles", "Yaw") },
+    fakeyawlimit = {pui.reference("AA", "Anti-aimbot angles", "Body yaw")},
+    fsbodyyaw = pui.reference("AA", "Anti-aimbot angles", "Freestanding body yaw"),
+    edgeyaw = pui.reference("AA", "Anti-aimbot angles", "Edge yaw"),
+    fakeduck = pui.reference("RAGE", "Other", "Duck peek assist"),
+    safepoint = pui.reference("RAGE", "Aimbot", "Force safe point"),
+	forcebaim = pui.reference("RAGE", "Aimbot", "Force body aim"),
+	player_list = pui.reference("PLAYERS", "Players", "Player list"),
+	reset_all = pui.reference("PLAYERS", "Players", "Reset all"),
+	apply_all = pui.reference("PLAYERS", "Adjustments", "Apply to all"),
+	load_cfg = pui.reference("Config", "Presets", "Load"),
 
-    pitch = { ui.reference('AA', 'Anti-aimbot angles', 'pitch'), },
-    aimbot = ui.reference('RAGE', 'Aimbot', 'Enabled'),
-    rage = { ui.reference('RAGE', 'Aimbot', 'Enabled') },
-    yaw = { ui.reference('AA', 'Anti-aimbot angles', 'Yaw') }, 
-    yawjitter = { ui.reference('AA', 'Anti-aimbot angles', 'Yaw jitter') },
-    bodyyaw = { ui.reference('AA', 'Anti-aimbot angles', 'Body yaw') },
-    freestand = { ui.reference('AA', 'Anti-aimbot angles', 'Freestanding') },
-    dt = { ui.reference('RAGE', 'Aimbot', 'Double tap') },
-    dt_fakelag_limit = { ui.reference('RAGE', 'Aimbot', 'Double tap fake lag limit') },
-    minimum_damage = ui.reference("RAGE", "Aimbot", "Minimum damage"),
-    minimum_damage_override = { ui.reference("RAGE", "Aimbot", "Minimum damage override") },
+    fl_enable = pui.reference("AA", "Fake lag", "Enabled"),
+	fl_limit = pui.reference("AA", "Fake lag", "Limit"),
+    fl_amount = pui.reference("AA", "Fake lag", "Amount"),
+    fl_var = pui.reference("AA", "Fake lag", "Variance"),
 
-    fakelag = { ui.reference("AA", "Fake lag", "Limit") },
-    flenabled = { ui.reference("AA", "Fake lag", "Enabled") },
-    flamount  = { ui.reference("AA", "Fake lag", "Amount") },
-    variance  = { ui.reference("AA", "Fake lag", "Variance") },
+	dt_limit = pui.reference("RAGE", "Aimbot", "Double tap fake lag limit"),
 
-    slow = { ui.reference('AA', 'Other', 'Slow motion') },
-    leg_movement = { ui.reference('AA', 'Other', "Leg movement") },
-    os = { ui.reference('AA', 'Other', 'On shot anti-aim') },
-    fakep = { ui.reference('AA', 'Other', 'Fake peek') },
-
-    menu_color = ui.reference("Misc", "Settings", "Menu color"),
-    mates = ui.reference("Visuals", "Player ESP", "Teammates"),
-
-    bunnyhop = ui.reference("Misc", "Movement", "Bunny hop"),
-    autostrafe = ui.reference("Misc", "Movement", "Air strafe"),
+	quickpeek = pui.reference("RAGE", "Other", "Quick peek assist"),
+	yawjitter = {pui.reference("AA", "Anti-aimbot angles", "Yaw jitter") },
+	bodyyaw = {pui.reference("AA", "Anti-aimbot angles", "Body yaw") },
+	freestand = {pui.reference("AA", "Anti-aimbot angles", "Freestanding") },
+    roll = {pui.reference("AA", "Anti-aimbot angles", "Roll") },
+	os = {pui.reference("AA", "Other", "On shot anti-aim") },
+	slow = {pui.reference("AA", "Other", "Slow motion") },
+	dt = {pui.reference("RAGE", "Aimbot", "Double tap")},
+    dt = pui.reference("RAGE", "Aimbot", "Double tap"),
+	hs = pui.reference("AA", "Other", "On shot anti-aim"),
+	fakelag = pui.reference("AA", "Fake lag", "Enabled"),
+    slow_motion = pui.reference("AA", "Other", "Slow motion"),
+    menucol = pui.reference("MISC", "Settings", "Menu color"),
+    mindmg = pui.reference("RAGE", "Aimbot", "Minimum damage override"),
+    lmovement = pui.reference("AA", "Other", "Leg movement"),
+    rage_cb = pui.reference("RAGE", "Aimbot", "Enabled"),
+    fake_duck = pui.reference("RAGE","Other","Duck peek assist"),
 }
 
-local x_ind, y_ind = client.screen_size()
-
-local lua_xd = ui_handler.group("aa", "fake lag")
-local lua_group = ui_handler.group("aa", "anti-aimbot angles")
-local config_group = ui_handler.group("aa", "other")
-local other_group = ui_handler.group("aa", "anti-aimbot angles")
-local warmup_group = ui_handler.group("aa", "other")
-pui.accent = "" .. color(table.unpack({ui.get(ref.menu_color)})):to_hex()
-
-local antiaim_cond = { '\vGlobal\r', '\vStanding\r', '\vWalking\r', '\vRunning\r' , '\vAir\r', '\vAir-Crouch\r', '\vDuck\r', '\vDuck-Move\r' }
-local short_cond = { '\vGlobal ~\r', '\vStanding ~\r', '\vWakling ~\r', '\vRunning ~\r' ,'\vAir ~\r', '\vAir-Crouch ~\r', '\vDuck ~\r', '\vDuck-Move ~\r' }
-
-
-local lua_menu = {
-    main = {
-        xdcheckbox = lua_xd:checkbox("FineBit enable"),
-        spaceinf = lua_group:label("\a373737FF Information"),
-        spacerg = lua_group:label("\a373737FF Ragebot Features"),
-        spaceaa = lua_group:label("\a373737FF Anti-Aim System"),
-        spacevs = lua_group:label("\a373737FF Visuals Features"),
-        spacemisc = lua_group:label("\a373737FF Miscellaneous"),
-        --spacecfg = lua_group:label("\a373737FF Configs System"),--" Ragebot Features", в строчку ниже
-        tab = lua_xd:combobox('\rCurrent Tab', {" Information", " Ragebot Features", " Anti-Aim System", " Visuals Features", " Miscellaneous"--[[ " Configs System"]]}),
-        user = lua_group:button("Welcome Dear User:\v" .. steam_name),
-        build = lua_group:button("Build:\v" .. build),
-        last_upd = lua_group:button("Last Update:\v09.03.2025"),
-        -- discord_link = lua_group:button("Join Us: \vFineBit", function() SteamOverlayAPI.OpenExternalBrowserURL("https://discord.gg/qBVJBmrQ") end),
-    },
-    antiaim = {
-        tab = lua_group:combobox("AntiAim Tab", {"Main", "Builder"}),
-        yaw_base = lua_group:combobox("Yaw Base", {"Local view", "At targets"}),
-        addons = lua_group:multiselect('Helpers', {"Anti-Bruteforce", 'Spin AA On Warmup', 'Anti Backstab', 'Safe Head', 'Bomb E Fix'}),
-        anti_bruteforce_mode = lua_group:combobox("Anti-Bruteforce Mode", {"Minimal", "Big"}),
-        safe_head = lua_group:multiselect('Safe Head', {'Air+C Knife', 'Air+C Zeus', 'High Distance'}),
-        yaw_direction = lua_group:multiselect('Yaw Override', {'Freestanding', 'Manual', 'Edge Yaw'}),
-        key_freestand = lua_group:hotkey('\v ~ \rFreestanding'),
-        key_left = lua_group:hotkey('\v ~ \rManual Left'),
-        key_right = lua_group:hotkey('\v ~ \rManual Right'),
-        key_forward = lua_group:hotkey('\v ~ \rManual Forward'),
-        key_edge_yaw = lua_group:hotkey('\v ~ \rEdge Yaw'),
-        condition = lua_group:combobox('Current Condition', antiaim_cond),
-    },
-    misc = {
-        watermark = lua_group:checkbox("Watermark"),
-        watermark_color = lua_group:checkbox("\v ~ \rWatermark Color", {255, 255, 255}),
-        watermark_style = lua_group:combobox("\v ~ \rWatermark Style", {"Default", "Modern", "Legacy", "Branded"}),
-        cross_ind = lua_group:checkbox("Crosshair Indicators", {255, 255, 255}),
-        cross_color = lua_group:checkbox("\v ~ \rIndicator Gradient Color", {255, 255, 255}),
-        key_color = lua_group:checkbox("\v ~ \rKeybinds Color", {255, 255, 255}),
-        manual_arrows = lua_group:checkbox("Manual Indicator", {255,255,255}),
-        damage_indicator = lua_group:checkbox("Damage Indicator"),
-        damage_indicator_mode = lua_group:combobox("\v ~ \rMode", {"On Bind", "Always"}),
-        damage_indicator_style = lua_group:combobox("\v ~ \rStyle", {"Default", "Pixel"}),
-        info_panel = lua_group:checkbox("Info Panel", {255, 255, 255}),
-        velocity_window = lua_group:checkbox("Velocity Window", {255, 255, 255}),
-        velocity_style = lua_group:combobox("\v ~ \rVelocity Style", {"Default", "Gradient", "Modern"}),
-        fix_hideshots = lua_group:checkbox("Fix Hideshots"),
-        auto_tp = lua_group:checkbox("Automatic Teleport"),
-        auto_tp_key = lua_group:hotkey("  \v ~ \rAutomatic Teleport", true),
-        log = lua_group:checkbox("Ragebot Logs"),
-        log_glow_color = lua_group:label("\v ~ \rGlow Color", {255, 255, 255}),
-        log_hit_color = lua_group:label("\v ~ \rHit Color", {255, 255, 255}),
-        log_miss_color = lua_group:label("\v ~ \rMiss Color", {255, 100, 100}),
-        log_type = lua_group:multiselect("\v ~ \rLog Types", {"Console", "Screen"}),
-        third_person = lua_group:checkbox("Third Person Distance"),
-        third_person_value = lua_group:slider("\v ~ \rThird Person Distance Value", 30, 200, 50),
-        aspectratio = lua_group:checkbox("Aspect Ratio"),
-        aspectratio_value = lua_group:slider("\v ~ \rAspect Ratio Value", 0, 200, 0, true, " ", 0.01, {[0] = "Disabled", [125] = "5:4", [133] = "4:3", [160] = "16:9", [170] = "16:10"}),
-        animation = lua_group:checkbox("Animation Breakers"),
-        animation_ground = lua_group:combobox("\v ~ \rGround", {"Off", "Static", "Jitter", "Moonwalk", "Randomize"}),
-        animation_air = lua_group:combobox("\v ~ \rAir", {"Off", "Static", "Jitter", "Moonwalk", "Randomize"}),
-        animation_addons = lua_group:multiselect("\v ~ \rAddons", {"Adjust Body Lean", "Earthquake"--[[, "Smoothing"]]}),
-        animation_body_lean = lua_group:slider("Body Lean Value", 0, 100, 0, true, "%", 0.01, {[0] = "Disabled", [35] = "Low", [50] = "Medium", [75] = "High", [100] = "Extreme"}),
-        
-        resolver = lua_group:checkbox("Resolver"),
-        predict = lua_group:checkbox("Predict Enemies"),
-        predictind = lua_group:checkbox("Predict Indicator"),
-        predict_flag = lua_group:checkbox("\v ~ \rPredict ESP Flag"),
-        predict_type = lua_group:combobox("\v ~ \rPredict Type", {"Off", "New Method"}),
-        unsafe_charge = lua_group:checkbox("Unsafe Recharge In Air"),
-        label2e = lua_group:label("\a9FCA2BFF!!!СКОРО ДОБАВЯТСЯ!!!"),
-        ai_peek = lua_group:label("\a747474FFAi-peek"),
-        skholnik_exp = lua_group:label("\a747474FFShkolnik EXPLOIT"),
-
-        -- ▪
-        autobuy = lua_group:checkbox("Smart AutoBuy"),
-        autobuy_primary = lua_group:combobox("\v ~ \rPrimary", {"None", "AWP", "Auto", "Scout"}),
-        autobuy_second = lua_group:combobox("\v ~ \rSecond", {"None", "Deagle | R8", "Dualies", "P250", "CZ | FN57 | Tec9"}),
-        autobuy_nades = lua_group:multiselect("\v ~ \rNades", {"Molotov", "Hegrenade", "Smokegrenade"}),
-        autobuy_other = lua_group:multiselect("\v ~ \rOther", {"Vesthelm", "Vest", "Taser", "Defuser"}),
-        spammers = lua_group:multiselect("Spammers", {"Clantag", "TrashTalk"}),
-
-        warmup_settings = warmup_group:button("Default Warmup Settings", function() return client.exec('sv_cheats 1; mp_do_warmup_offine 1; bot_stop 1; sv_airaccelerate 100; sv_infinite_ammo 1; sv_regeneration_force_on 1; sv_grenade_trajectory 1; sv_grenade_trajectory_thickness 0.2; bot_kick; give weapon_; give weapon_molotov; give weapon_smokegrenade; give weapon_ssg08; mp_warmuptime 9999999999999 mp_autoteambalance 0;mp_limitteams 0;mp_death_drop_gun 0;mp_buy_anywhere 1; impulse 101') end),
-    hegrenade
-    },
-    config = {
-        list = config_group:listbox('Configs', '', false),
-        name = config_group:textbox('Configuration name', '', false),
-        load = config_group:button('Load', function() end),
-
-        save = config_group:button('Create \v/\r Save', function() end),
-
-        delete = config_group:button('Delete', function() end),
-        import = config_group:button('Import from \vclipboard', function() end),
-        export = config_group:button('Export to \vclipboard', function() end)
-    }
-}
-
-local antiaim_system = {} do
-
-    for i=1, #antiaim_cond do
-        antiaim_system[i] = {
-            label = lua_group:label('~ Conditional \vBuilder\r Setup ~ '),
-            enable = lua_group:checkbox('Enable · '..antiaim_cond[i]),
-            yaw_type = lua_group:combobox(short_cond[i]..' Yaw Type', {"Default", "Delay"}),
-            delay_type = lua_group:combobox(short_cond[i]..' Delay Type', {"Default", "Random From To"}),
-            yaw_delay = lua_group:slider(short_cond[i]..' Delay Ticks', 1, 28, 4, true, 't', 1), 
-            from_delay = lua_group:slider(short_cond[i]..' Delay Ticks', 1, 28, 4, true, 't', 1), 
-            to_delay = lua_group:slider(short_cond[i]..' Delay Ticks', 1, 28, 4, true, 't', 1), 
-            yaw_left = lua_group:slider(short_cond[i]..' Yaw Left', -180, 180, 0, true, '°', 1),
-            yaw_right = lua_group:slider(short_cond[i]..' Yaw Right', -180, 180, 0, true, '°', 1),
-            yaw_random = lua_group:slider(short_cond[i]..' Randomization', 0, 100, 0, true, '%', 1),
-            mod_type = lua_group:combobox(short_cond[i]..' Jitter Type', {'Off', 'Offset', 'Center', 'Random', 'Skitter'}),
-            mod_dm = lua_group:slider(short_cond[i]..' Jitter Amount', -180, 180, 0, true, '°', 1),
-            body_yaw_type = lua_group:combobox(short_cond[i]..' Body Yaw', {'Off', 'Opposite', 'Jitter', 'Static'}),
-            body_slider = lua_group:slider(short_cond[i]..' Body Yaw Amount', -180, 180, 0, true, '°', 1),
-            force_def = lua_group:checkbox(short_cond[i]..' Force Defensive'),
-            defensive = lua_group:checkbox(short_cond[i]..' Defensive Anti~Aim'),
-            defensive_type = lua_group:combobox(short_cond[i]..' Defensive Type', {'Default', 'Builder'}),
-
-            defensive_yaw = lua_group:combobox(short_cond[i]..' Defensive Yaw', {'Off', 'Spin', 'Jitter', "Opposite", 'Random'}),
-
-            yaw_value = lua_group:slider(short_cond[i]..' Yaw Value', -180, 180, 0, true, '°', 1),
-            yaw_value_opposite = lua_group:slider(short_cond[i]..' Yaw Value', -180, 180, 0, true, '°', 1),
-            yaw_value_jitter1 = lua_group:slider(short_cond[i]..' Yaw Value \v#1', -180, 180, 0, true, '°', 1),
-            yaw_value_jitter2 = lua_group:slider(short_cond[i]..' Yaw Value \v#2', -180, 180, 0, true, '°', 1),
-            yaw_value_random1 = lua_group:slider(short_cond[i]..' Yaw Value \v#1', -180, 180, 0, true, '°', 1),
-            yaw_value_random2 = lua_group:slider(short_cond[i]..' Yaw Value \v#2', -180, 180, 0, true, '°', 1),
-            def_yaw_value = lua_group:slider(short_cond[i]..' [DEF] Yaw Value', -180, 180, 0, true, '°', 1),
-            def_mod_type = lua_group:combobox(short_cond[i]..' [DEF] Jitter Type', {'Off', 'Offset', 'Center', 'Random', 'Skitter'}),
-            def_mod_dm = lua_group:slider(short_cond[i]..' [DEF] Jitter Amount', -180, 180, 0, true, '°', 1),
-            def_body_yaw_type = lua_group:combobox(short_cond[i]..' [DEF] Body Yaw', {'Off', 'Opposite', 'Jitter', 'Static'}),
-            def_body_slider = lua_group:slider(short_cond[i]..' [DEF] Body Yaw Amount', -180, 180, 0, true, '°', 1),
-
-            defensive_pitch = lua_group:combobox(short_cond[i]..' Defensive Pitch', {'Off', 'Custom', 'Jitter', 'Random', "Spin", "Unmatched Undetect"}),
-            pitch_value = lua_group:slider(short_cond[i]..' Pitch Value', -89, 89, 0, true, '°', 1),
-            pitch_value1 = lua_group:slider(short_cond[i]..' Pitch Value \v#1', -89, 89, 0, true, '°', 1),
-            pitch_value2 = lua_group:slider(short_cond[i]..' Pitch Value \v#2', -89, 89, 0, true, '°', 1),
-            pitch_spin_value = lua_group:slider(short_cond[i]..' Pitch Value', -89, 89, 0, true, '°', 1),
-            pitch_spin_speed = lua_group:slider(short_cond[i]..' Speed', -10, 10, 0, true, '°', 1),
-            pitch_random_value1 = lua_group:slider(short_cond[i]..' Pitch Value \v#1', -89, 89, 0, true, '°', 1),
-            pitch_random_value2 = lua_group:slider(short_cond[i]..' Pitch Value \v#2', -89, 89, 0, true, '°', 1),
-
-            scholnik_exp = lua_group:checkbox(short_cond[i]..' [DEF] SHCOLNIK EXPLOIT'),
-
-            defensive_v2 = lua_group:checkbox(short_cond[i]..' Defensive \rv2'),
-            defensive_v2_pitch = lua_group:combobox(short_cond[i]..' Defensive \rv2 Type', {'Zero', 'Down', 'Up', "Random", "Lerp"}),
-            defensive_v2_lerp_pitch_value = lua_group:slider(short_cond[i]..' Lerp Value', -89, 89, 0, true, '°', 1),
-            defensive_v2_lerp_pitch_speed = lua_group:slider(short_cond[i]..' Lerp Speed', -10, 10, 0, true, '°', 1),
-            defensive_v2_random_pitch_value1 = lua_group:slider(short_cond[i]..' Random Type Value \v#1', -89, 89, 0, true, '°', 1),
-            defensive_v2_random_pitch_value2 = lua_group:slider(short_cond[i]..' Random Type Value \v#2', -89, 89, 0, true, '°', 1),
-            defensive_v2_type = lua_group:combobox(short_cond[i]..' Defensive \rv2 Type', {'Left', 'Right', 'Custom', 'Jitter', "Random", "Spin"}),
-            defensive_v2_spin_type_value = lua_group:slider(short_cond[i]..' Spin Value', -180, 180, 0, true, '°', 1),
-            defensive_v2_spin_type_speed = lua_group:slider(short_cond[i]..' Spin Speed', -11, 11, 0, true, '°', 1),
-            defensive_v2_jitter_value1 = lua_group:slider(short_cond[i]..' Jitter Value \v#1', -110, 110, 0, true, '°', 1),
-            defensive_v2_jitter_value2 = lua_group:slider(short_cond[i]..' Jitter Value \v#2', -110, 110, 0, true, '°', 1),
-            defensive_v2_random_type_from_value1 = lua_group:slider(short_cond[i]..' Random Type From Value \v#1', -110, 110, 0, true, '°', 1),
-            defensive_v2_random_type_to_value1 = lua_group:slider(short_cond[i]..' Random Type To Value \v#1', -110, 110, 0, true, '°', 1),
-            defensive_v2_random_type_from_value2 = lua_group:slider(short_cond[i]..' Random Type From Value \v#2', -110, 110, 0, true, '°', 1),
-            defensive_v2_random_type_to_value2 = lua_group:slider(short_cond[i]..' Random Type To Value \v#2', -110, 110, 0, true, '°', 1),
-            defensive_v2_ticks = lua_group:slider(short_cond[i]..' Ticks', 0, 10, 1, 1),
-            defensive_v2_value = lua_group:slider(short_cond[i]..' Value', -110, 110, 0, 1),
-            -- defensive_v2_key = lua_group:hotkey(short_cond[i]..' v2 Bind'),
-        }
+local function normalize_yaw(val)
+    if(val > 180) then
+        val = val - 360
+    elseif(val < -180) then
+        val = val + 360
     end
-
-    local enabledxd = lua_menu.main.xdcheckbox
-    local info_tab = {lua_menu.main.tab, " Information"}
-    local aa_tab = {lua_menu.main.tab, " Anti-Aim System"}
-    local misc_tab = {lua_menu.main.tab, " Miscellaneous"}
-    local configs_tab --= {lua_menu.main.tab, " Configs System"}
-    local visual_tab = {lua_menu.main.tab, " Visuals Features"}
-    local aa_builder = {lua_menu.antiaim.tab, "Builder"}
-    local aa_main = {lua_menu.antiaim.tab, "Main"}
-    local ragebot_tab = {lua_menu.main.tab, " Ragebot Features"}
-
-    lua_menu.main.tab:depend(enabledxd)
-    lua_menu.misc.warmup_settings:depend(enabledxd)
-
-    lua_menu.main.spaceinf:depend(enabledxd, info_tab)
-    lua_menu.main.spaceaa:depend(enabledxd, aa_tab)
-    lua_menu.main.spaceaa:depend(enabledxd, aa_main)
-    lua_menu.main.spacevs:depend(enabledxd, visual_tab)
-    lua_menu.main.spacerg:depend(enabledxd, ragebot_tab)
-    lua_menu.main.spacemisc:depend(enabledxd, misc_tab)
-    lua_menu.config.list:depend(enabledxd, configs_tab)
-    lua_menu.config.name:depend(enabledxd, configs_tab)
-    lua_menu.config.save:depend(enabledxd, configs_tab)
-    lua_menu.config.load:depend(enabledxd, configs_tab)
-    lua_menu.config.delete:depend(enabledxd, configs_tab)
-    lua_menu.config.import:depend(enabledxd, configs_tab)
-    lua_menu.config.export:depend(enabledxd, configs_tab)
-    lua_menu.main.user:depend(enabledxd, info_tab)
-    lua_menu.main.build:depend(enabledxd, info_tab)
-    lua_menu.main.last_upd:depend(enabledxd, info_tab) 
-    lua_menu.antiaim.tab:depend(enabledxd, aa_tab)
-    lua_menu.antiaim.addons:depend(enabledxd, aa_tab, aa_main)
-    lua_menu.antiaim.anti_bruteforce_mode:depend(enabledxd, aa_tab, {lua_menu.antiaim.addons, "Anti-Bruteforce"}, aa_main)
-    lua_menu.antiaim.safe_head:depend(enabledxd, aa_tab, {lua_menu.antiaim.addons, "Safe Head"}, aa_main)
-    lua_menu.antiaim.yaw_base:depend(enabledxd, aa_tab, aa_main)
-    lua_menu.antiaim.condition:depend(enabledxd, aa_tab, aa_builder)
-    lua_menu.antiaim.yaw_direction:depend(enabledxd, aa_tab, aa_main)
-    lua_menu.antiaim.key_freestand:depend(enabledxd, aa_tab, {lua_menu.antiaim.yaw_direction, "Freestanding"}, aa_main)
-    lua_menu.antiaim.key_left:depend(enabledxd, aa_tab, {lua_menu.antiaim.yaw_direction, "Manual"}, aa_main)
-    lua_menu.antiaim.key_right:depend(enabledxd, aa_tab, {lua_menu.antiaim.yaw_direction, "Manual"}, aa_main)
-    lua_menu.antiaim.key_forward:depend(enabledxd, aa_tab, {lua_menu.antiaim.yaw_direction, "Manual"}, aa_main)
-    lua_menu.antiaim.key_edge_yaw:depend(enabledxd, aa_tab, {lua_menu.antiaim.yaw_direction, "Edge Yaw"}, aa_main)
-    lua_menu.misc.watermark:depend(enabledxd, visual_tab)
-    lua_menu.misc.watermark_color:depend(enabledxd, visual_tab, {lua_menu.misc.watermark, true})
-    lua_menu.misc.watermark_style:depend(enabledxd, visual_tab, {lua_menu.misc.watermark, true})
-    lua_menu.misc.cross_ind:depend(enabledxd, visual_tab)
-    lua_menu.misc.damage_indicator:depend(enabledxd, visual_tab)
-    lua_menu.misc.manual_arrows:depend(enabledxd, visual_tab)
-    lua_menu.misc.damage_indicator_mode:depend(enabledxd, visual_tab, {lua_menu.misc.damage_indicator, true})
-    lua_menu.misc.damage_indicator_style:depend(enabledxd, visual_tab, {lua_menu.misc.damage_indicator, true})
-    lua_menu.misc.info_panel:depend(enabledxd, visual_tab)
-    lua_menu.misc.velocity_window:depend(enabledxd, visual_tab)
-    lua_menu.misc.velocity_style:depend(enabledxd, visual_tab, {lua_menu.misc.velocity_window, true})
-    lua_menu.misc.cross_color:depend(enabledxd, visual_tab, {lua_menu.misc.cross_ind, true})
-    lua_menu.misc.key_color:depend(enabledxd, visual_tab, {lua_menu.misc.cross_ind, true})
-    lua_menu.misc.log:depend(enabledxd, visual_tab)
-    lua_menu.misc.log_type:depend(enabledxd, visual_tab, {lua_menu.misc.log, true})
-    lua_menu.misc.log_glow_color:depend(enabledxd, visual_tab, {lua_menu.misc.log, true})
-    lua_menu.misc.log_hit_color:depend(enabledxd, visual_tab, {lua_menu.misc.log, true})
-    lua_menu.misc.log_miss_color:depend(enabledxd, visual_tab, {lua_menu.misc.log, true})
-    lua_menu.misc.fix_hideshots:depend(enabledxd, misc_tab)
-    lua_menu.misc.auto_tp:depend(enabledxd, misc_tab)
-    lua_menu.misc.auto_tp_key:depend(enabledxd, misc_tab, {lua_menu.misc.auto_tp, true})
-    lua_menu.misc.animation:depend(enabledxd, misc_tab)
-    lua_menu.misc.animation_ground:depend(enabledxd, misc_tab, {lua_menu.misc.animation, true})
-    lua_menu.misc.animation_air:depend(enabledxd, misc_tab, {lua_menu.misc.animation, true})
-    lua_menu.misc.animation_addons:depend(enabledxd, misc_tab, {lua_menu.misc.animation, true})
-    lua_menu.misc.animation_body_lean:depend(enabledxd, misc_tab, {lua_menu.misc.animation, true}, {lua_menu.misc.animation_addons, "Adjust Body Lean"})
-    lua_menu.misc.third_person:depend(enabledxd, misc_tab)
-    lua_menu.misc.third_person_value:depend(enabledxd, misc_tab, {lua_menu.misc.third_person, true})
-    lua_menu.misc.aspectratio:depend(enabledxd, misc_tab)
-    lua_menu.misc.aspectratio_value:depend(enabledxd, misc_tab, {lua_menu.misc.aspectratio, true})
-    lua_menu.misc.predict:depend(enabledxd, ragebot_tab)
-    lua_menu.misc.label2e:depend(enabledxd, ragebot_tab)
-    lua_menu.misc.ai_peek:depend(enabledxd, ragebot_tab)
-    lua_menu.misc.skholnik_exp:depend(enabledxd, ragebot_tab)
-    lua_menu.misc.resolver:depend(enabledxd, ragebot_tab)
-    lua_menu.misc.unsafe_charge:depend(enabledxd, ragebot_tab)
-    lua_menu.misc.predictind:depend(enabledxd, ragebot_tab, {lua_menu.misc.predict, true})
-    lua_menu.misc.predict_flag:depend(enabledxd, ragebot_tab, {lua_menu.misc.predict, true})
-    lua_menu.misc.predict_type:depend(enabledxd, ragebot_tab, {lua_menu.misc.predict, true})
-    lua_menu.misc.autobuy:depend(enabledxd, misc_tab)
-    lua_menu.misc.autobuy_primary:depend(enabledxd, misc_tab, {lua_menu.misc.autobuy, true})
-    lua_menu.misc.autobuy_second:depend(enabledxd, misc_tab, {lua_menu.misc.autobuy, true})
-    lua_menu.misc.autobuy_nades:depend(enabledxd, misc_tab, {lua_menu.misc.autobuy, true})
-    lua_menu.misc.autobuy_other:depend(enabledxd, misc_tab, {lua_menu.misc.autobuy, true})
-    lua_menu.misc.spammers:depend(enabledxd, misc_tab)
-
-    for i=1, #antiaim_cond do
-        local cond_check = {lua_menu.antiaim.condition, function() return (i ~= 1) end}
-        local tab_cond = {lua_menu.antiaim.condition, antiaim_cond[i]}
-        local cnd_en = {antiaim_system[i].enable, function() if (i == 1) then return true else return antiaim_system[i].enable:get() end end}
-        local aa_tab = {lua_menu.main.tab, " Anti-Aim System"}
-        local jit_ch = {antiaim_system[i].mod_type, function() return antiaim_system[i].mod_type:get() ~= "Off" end}
-        local def_jit_ch = {antiaim_system[i].def_mod_type, function() return antiaim_system[i].def_mod_type:get() ~= "Off" end}
-        local def_ch = {antiaim_system[i].defensive, true}
-        local body_ch = {antiaim_system[i].body_yaw_type, function() return antiaim_system[i].body_yaw_type:get() ~= "Off" end}
-        local def_body_ch = {antiaim_system[i].def_body_yaw_type, function() return antiaim_system[i].def_body_yaw_type:get() ~= "Off" end}
-        local delay_ch = {antiaim_system[i].yaw_type, "Delay"}
-        local delay_ch1 = {antiaim_system[i].delay_type, "Default"}
-        local delay_ch2 = {antiaim_system[i].delay_type, "Random From To"}
-        local yaw_ch = {antiaim_system[i].defensive_yaw, "Spin"}
-        local yaw_ch1 = {antiaim_system[i].defensive_yaw, "Jitter"}
-        local yaw_ch2 = {antiaim_system[i].defensive_yaw, "Random"}
-        local yaw_ch3 = {antiaim_system[i].defensive_yaw, "Opposite"}
-        local def_yaw_ch = {antiaim_system[i].defensive_type, "Builder"}
-        local enable_fine = {lua_menu.main.xdcheckbox}
-
-        local def_def = {antiaim_system[i].defensive_type, "Default"}
-        local def_build = {antiaim_system[i].defensive_type, "Builder"}
-        local pitch_ch = {antiaim_system[i].defensive_pitch, "Custom"}
-        local pitch_ch1 = {antiaim_system[i].defensive_pitch, "Jitter"}
-        local pitch_ch2 = {antiaim_system[i].defensive_pitch, "Spin"}
-        local pitch_ch3 = {antiaim_system[i].defensive_pitch, "Random"}
-        local pitch_ch4 = {antiaim_system[i].defensive_pitch, "Unmatched Undetect"}
-        local schol_exp = {antiaim_system[i].scholnik_exp, true}
-        local def_ph = antiaim_system[i].defensive_v2
-        local def_ph_type = antiaim_system[i].defensive_v2_type
-        local def_ph_pitch = antiaim_system[i].defensive_v2_pitch
-        antiaim_system[i].label:depend(tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].enable:depend(tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].yaw_type:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].delay_type:depend(cnd_en, tab_cond, aa_tab, delay_ch, aa_builder)
-        antiaim_system[i].yaw_delay:depend(cnd_en, tab_cond, aa_tab, delay_ch, delay_ch1, aa_builder)
-        antiaim_system[i].from_delay:depend(cnd_en, tab_cond, aa_tab, delay_ch, delay_ch2, aa_builder)
-        antiaim_system[i].to_delay:depend(cnd_en, tab_cond, aa_tab, delay_ch, delay_ch2, aa_builder)
-        antiaim_system[i].yaw_left:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].yaw_right:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].yaw_random:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].mod_type:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-
-        antiaim_system[i].mod_dm:depend(cnd_en, tab_cond, aa_tab, jit_ch, aa_builder)
-        antiaim_system[i].body_yaw_type:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].body_slider:depend(cnd_en, tab_cond, aa_tab, body_ch, aa_builder)
-
-        antiaim_system[i].force_def:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].defensive:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].defensive_type:depend(cnd_en, tab_cond, aa_tab, def_ch, aa_builder)
-        antiaim_system[i].defensive_yaw:depend(cnd_en, tab_cond, aa_tab, def_ch, def_def, aa_builder)
-        antiaim_system[i].def_yaw_value:depend(cnd_en, tab_cond, aa_tab, def_ch, def_yaw_ch, aa_builder)
-        antiaim_system[i].yaw_value:depend(cnd_en, tab_cond, aa_tab, def_ch, yaw_ch, def_def, aa_builder)
-        antiaim_system[i].yaw_value_jitter1:depend(cnd_en, tab_cond, aa_tab, def_ch, yaw_ch1, def_def, aa_builder)
-        antiaim_system[i].yaw_value_jitter2:depend(cnd_en, tab_cond, aa_tab, def_ch, yaw_ch1, def_def, aa_builder)
-        antiaim_system[i].yaw_value_random1:depend(cnd_en, tab_cond, aa_tab, def_ch, yaw_ch2, def_def, aa_builder)
-        antiaim_system[i].yaw_value_random2:depend(cnd_en, tab_cond, aa_tab, def_ch, yaw_ch2, def_def, aa_builder)
-        antiaim_system[i].yaw_value_opposite:depend(cnd_en, tab_cond, aa_tab, def_ch, yaw_ch3, def_def, aa_builder)
-        antiaim_system[i].def_mod_type:depend(cnd_en, tab_cond, aa_tab, def_ch, def_build, aa_builder)
-        antiaim_system[i].def_mod_dm:depend(cnd_en, tab_cond, aa_tab, def_ch, def_build, def_jit_ch, aa_builder)
-        antiaim_system[i].def_body_yaw_type:depend(cnd_en, tab_cond, aa_tab, def_ch, def_build, aa_builder)
-        antiaim_system[i].def_body_slider:depend(cnd_en, tab_cond, aa_tab, def_ch, def_build, def_body_ch, aa_builder)
-        antiaim_system[i].defensive_pitch:depend(cnd_en, tab_cond, aa_tab, def_ch, aa_builder)
-        antiaim_system[i].pitch_value:depend(cnd_en, tab_cond, aa_tab, def_ch, pitch_ch, aa_builder)
-        antiaim_system[i].pitch_value1:depend(cnd_en, tab_cond, aa_tab, def_ch, pitch_ch1, aa_builder)
-        antiaim_system[i].pitch_value2:depend(cnd_en, tab_cond, aa_tab, def_ch, pitch_ch1, aa_builder)
-        antiaim_system[i].pitch_spin_value:depend(cnd_en, tab_cond, aa_tab, def_ch, pitch_ch2, aa_builder)
-        antiaim_system[i].pitch_spin_speed:depend(cnd_en, tab_cond, aa_tab, def_ch, pitch_ch2, aa_builder)
-        antiaim_system[i].pitch_random_value1:depend(cnd_en, tab_cond, aa_tab, def_ch, pitch_ch3, aa_builder)
-        antiaim_system[i].pitch_random_value2:depend(cnd_en, tab_cond, aa_tab, def_ch, pitch_ch3, aa_builder)
-        antiaim_system[i].scholnik_exp:depend(cnd_en, tab_cond, aa_tab, def_ch, aa_builder)
-        antiaim_system[i].defensive_v2:depend(cnd_en, tab_cond, aa_tab, aa_builder)
-        antiaim_system[i].defensive_v2_type:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder) 
-        antiaim_system[i].defensive_v2_jitter_value1:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Jitter'})
-        antiaim_system[i].defensive_v2_jitter_value2:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Jitter'})
-        antiaim_system[i].defensive_v2_random_type_from_value1:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Random'})
-        antiaim_system[i].defensive_v2_random_type_to_value1:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Random'})
-        antiaim_system[i].defensive_v2_random_type_from_value2:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Random'})
-        antiaim_system[i].defensive_v2_random_type_to_value2:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Random'})
-        antiaim_system[i].defensive_v2_spin_type_value:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Spin'})
-        antiaim_system[i].defensive_v2_spin_type_speed:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Spin'})
-        antiaim_system[i].defensive_v2_pitch:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder) 
-        antiaim_system[i].defensive_v2_ticks:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder)
-        antiaim_system[i].defensive_v2_value:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_type, 'Custom'})
-        antiaim_system[i].defensive_v2_lerp_pitch_value:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_pitch, 'Lerp'})
-        antiaim_system[i].defensive_v2_lerp_pitch_speed:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_pitch, 'Lerp'})
-        antiaim_system[i].defensive_v2_random_pitch_value1:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_pitch, 'Random'})
-        antiaim_system[i].defensive_v2_random_pitch_value2:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder, {def_ph_pitch, 'Random'})
-        -- antiaim_system[i].defensive_v2_key:depend(cnd_en, tab_cond, aa_tab, def_ph, aa_builder)
-    end
+    return val
 end
 
-local function hide_original_menu()
-    if lua_menu.main.xdcheckbox:get() then
-        ui.set_visible(ref.enabled, false)
-        ui.set_visible(ref.pitch[1], false)
-        ui.set_visible(ref.pitch[2], false)
-        ui.set_visible(ref.yawbase, false)
-        ui.set_visible(ref.yaw[1], false)
-        ui.set_visible(ref.yaw[2], false)
-        ui.set_visible(ref.yawjitter[1], false)
-        ui.set_visible(ref.roll[1], false)
-        ui.set_visible(ref.yawjitter[2], false)
-        ui.set_visible(ref.bodyyaw[1], false)
-        ui.set_visible(ref.bodyyaw[2], false)
-        ui.set_visible(ref.fsbodyyaw, false)
-        ui.set_visible(ref.edgeyaw, false)
-        ui.set_visible(ref.fakelag[1], false)
-        ui.set_visible(ref.freestand[1], false)
-        ui.set_visible(ref.freestand[2], false)
-        ui.set_visible(ref.flenabled[1], false)
-        ui.set_visible(ref.flenabled[2], false)
-        ui.set_visible(ref.flamount[1], false)
-        ui.set_visible(ref.variance[1], false)
-        ui.set_visible(ref.slow[1], false)
-        ui.set_visible(ref.slow[2], false)
-        ui.set_visible(ref.os[1], false)
-        ui.set_visible(ref.os[2], false)
-        ui.set_visible(ref.leg_movement[1], false)
-        ui.set_visible(ref.fakep[1], false)
-        ui.set_visible(ref.fakep[2], false)
-    else
-        ui.set_visible(ref.enabled, true)
-        ui.set_visible(ref.pitch[1], true)
-        ui.set_visible(ref.pitch[2], true)
-        ui.set_visible(ref.yawbase, true)
-        ui.set_visible(ref.yaw[1], true)
-        ui.set_visible(ref.yaw[2], true)
-        ui.set_visible(ref.yawjitter[1], true)
-        ui.set_visible(ref.roll[1], true)
-        ui.set_visible(ref.yawjitter[2], true)
-        ui.set_visible(ref.bodyyaw[1], true)
-        ui.set_visible(ref.bodyyaw[2], true)
-        ui.set_visible(ref.fsbodyyaw, true)
-        ui.set_visible(ref.edgeyaw, true)
-        ui.set_visible(ref.fakelag[1], true)
-        ui.set_visible(ref.freestand[1], true)
-        ui.set_visible(ref.freestand[2], true)
-        ui.set_visible(ref.flenabled[1], true)
-        ui.set_visible(ref.flenabled[2], true)
-        ui.set_visible(ref.flamount[1], true)
-        ui.set_visible(ref.variance[1], true)
-        ui.set_visible(ref.slow[1], true)
-        ui.set_visible(ref.slow[2], true)
-        ui.set_visible(ref.os[1], true)
-        ui.set_visible(ref.os[2], true)
-        ui.set_visible(ref.leg_movement[1], true)
-        ui.set_visible(ref.fakep[1], true)
-        ui.set_visible(ref.fakep[2], true)
-    end
-end
-
-client.set_event_callback("shutdown", function()
-        ui.set_visible(ref.enabled, true)
-        ui.set_visible(ref.pitch[1], true)
-        ui.set_visible(ref.pitch[2], true)
-        ui.set_visible(ref.yawbase, true)
-        ui.set_visible(ref.yaw[1], true)
-        ui.set_visible(ref.yaw[2], true)
-        ui.set_visible(ref.yawjitter[1], true)
-        ui.set_visible(ref.roll[1], true)
-        ui.set_visible(ref.yawjitter[2], true)
-        ui.set_visible(ref.bodyyaw[1], true)
-        ui.set_visible(ref.bodyyaw[2], true)
-        ui.set_visible(ref.fsbodyyaw, true)
-        ui.set_visible(ref.edgeyaw, true)
-        ui.set_visible(ref.fakelag[1], true)
-        ui.set_visible(ref.freestand[1], true)
-        ui.set_visible(ref.freestand[2], true)
-        ui.set_visible(ref.flenabled[1], true)
-        ui.set_visible(ref.flenabled[2], true)
-        ui.set_visible(ref.flamount[1], true)
-        ui.set_visible(ref.variance[1], true)
-        ui.set_visible(ref.slow[1], true)
-        ui.set_visible(ref.slow[2], true)
-        ui.set_visible(ref.os[1], true)
-        ui.set_visible(ref.os[2], true)
-        ui.set_visible(ref.leg_movement[1], true)
-        ui.set_visible(ref.fakep[1], true)
-        ui.set_visible(ref.fakep[2], true)
-end)
-
-local function randomize_value(original_value, percent)
-    local min_range = original_value - (original_value * percent / 100)
-    local max_range = original_value + (original_value * percent / 100)
-    return math.random(min_range, max_range)
-end
-
-local id = 1   
-local function player_state(cmd)
-    local lp = entity.get_local_player()
-    if lp == nil then return end
-
-    local vecvelocity = { entity.get_prop(lp, 'm_vecVelocity') }
-    local flags = entity.get_prop(lp, 'm_fFlags')
-    local velocity = math.sqrt(vecvelocity[1]^2+vecvelocity[2]^2)
-    local groundcheck = bit.band(flags, 1) == 1
-    local jumpcheck = bit.band(flags, 1) == 0 or cmd.in_jump == 1
-    local ducked = entity.get_prop(lp, 'm_flDuckAmount') > 0.7
-    local duckcheck = ducked or ui.get(ref.fakeduck)
-    local slowwalk_key = ui.get(ref.slow[1]) and ui.get(ref.slow[2])
-
-    if jumpcheck and duckcheck then return "Air+C"
-    elseif jumpcheck then return "Air"
-    elseif duckcheck and velocity > 10 then return "Duck-Moving"
-    elseif duckcheck and velocity < 10 then return "Duck"
-    elseif groundcheck and slowwalk_key and velocity > 10 then return "Walking"
-    elseif groundcheck and velocity > 5 then return "Moving"
-    elseif groundcheck and velocity < 5 then return "Stand"
-    else return "Global" end
+local function time_to_ticks(t)
+    return math.floor(0.5 + (t / globals.tickinterval()))
 end
 
 local defensive_check = {
@@ -1782,40 +1322,2388 @@ function reset_def()
     }
 end
 
-client.set_event_callback('run_command', function(cmd)
-    defensive_check.last_cmd = cmd.command_number
-end)
-
-local function exploit_charged()
-    if not ui.get(ref.dt[1]) or not ui.get(ref.dt[2]) or ui.get(ref.fakeduck) then return false end
-    if not entity.is_alive(entity.get_local_player()) or entity.get_local_player() == nil then return end
-    local weapon = entity.get_prop(entity.get_local_player(), 'm_hActiveWeapon')
-    if weapon == nil then return false end
-    local next_attack = entity.get_prop(entity.get_local_player(), 'm_flNextAttack') + 0.01
-    local checkcheck = entity.get_prop(weapon, 'm_flNextPrimaryAttack')
-    if checkcheck == nil then return end
-    local next_primary_attack = checkcheck + 0.01
-    if next_attack == nil or next_primary_attack == nil then return false end
-    return next_attack - globals.curtime() < 0 and next_primary_attack - globals.curtime() < 0
-end
-
-local last_sim_time = 0
-local native_GetClientEntity = vtable_bind('client.dll', 'VClientEntityList003', 3, 'void*(__thiscall*)(void*, int)')
-local defensive_until = 0
-
 local function check_charge()
     local lp = entity.get_local_player()
     local m_nTickBase = entity.get_prop(lp, 'm_nTickBase')
     local client_latency = client.latency()
-    local shift = math.floor(m_nTickBase - globals.tickcount() - 3 - toticks(client_latency) * .5 + .5 * (client_latency * 10))
-    local wanted = -14 + (ui.get(ref.dt_fakelag_limit[1]) - 1) + 3
+    local shift = math.floor(m_nTickBase - globals.tickcount() - 3 - time_to_ticks(client_latency) * .5 + .5 * (client_latency * 10))
+    local wanted = -14 + (ref.dt_limit:get() - 1) + 3
     return shift <= wanted
 end
 
+function is_defensive_active(lp)
+    if not check_charge() then return false end
+    return defensive_check.defensive
+end
 
-client.set_event_callback('predict_command', function(cmd)
+local function calculate_angle(lpos, epos)
+    local pos_diff = epos - lpos
+    local angle = math.atan(pos_diff.y / pos_diff.x)
+    angle = normalize_yaw(angle * 180 / math.pi)
+    if pos_diff.x >= 0 then
+        angle = normalize_yaw(angle + 180)
+    end
+    return angle
+end
+
+local lua = {
+    conds = {"Global", "Standing", "Moving", "Slow-walking", "Jumping", "Jump-crouching", "Crouching", "Hidden"},
+    conds_no_g = {"Standing", "Moving", "Slow-walking", "Jumping", "Jump-crouching", "Crouching"},
+    short_conds = {"[G]", "[S]", "[M]", "[SW]", "[J]", "[JC]", "[C]", "[H]"},
+    hitgroup_mass = {'generic','head', 'chest', 'stomach','left arm', 'right arm','left leg', 'right leg','neck', 'generic', 'gear'},
+}
+
+local a_add = "\a3d4355FFa\r "
+local m_add = "\a3d4355FFm\r "
+local v_add = "\a3d4355FFv\r "
+local aspect_table = {}
+
+local function gcd(m, n)
+	while m ~= 0 do
+		m, n = math.fmod(n, m), m
+	end
+
+	return n
+end
+
+function aspect_ratio_table()
+    local screen_width, screen_height = client.screen_size()
+    for i = 1, 200 do
+        local i2 = (200-i) * 0.01
+		local divisor = gcd(screen_width * i2, screen_height)
+		if screen_width * i2 / divisor < 100 or i2 == 1 then
+			aspect_table[i] = screen_width * i2 / divisor .. ":" .. screen_height / divisor
+		end
+    end
+end
+
+aspect_ratio_table()
+
+local cvar_opt_table = {
+    "fog_enable",
+    "r_dynamic",
+    "r_drawtracers",
+    "r_drawtracers_firstperson",
+    "cl_foot_contact_shadows",
+    "r_drawdecals",
+    "func_break_max_pieces",
+    "r_3dsky",
+    "mat_bloomamount_rate",
+    "r_updaterefracttexture",
+    "r_lightinterp",
+    "muzzleflash_light",
+    "net_allow_multicast",
+    "r_avglightmap",
+    "rope_smooth",
+    "rope_subdiv",
+    "rope_wind_dist",
+    "r_updaterefracttexture",
+    "mat_yuv",
+    "mat_bumpbasis",
+    "mat_autoexposure_max",
+}
+
+local fps_cvar_values = {}
+
+for i = 1, #cvar_opt_table do
+    table.insert(fps_cvar_values, {cvar[cvar_opt_table[i]]:get_int(), cvar_opt_table[i]})
+end
+
+local fps_menu = {}
+
+for i = 1, #fps_cvar_values do
+    table.insert(fps_menu, fps_cvar_values[i][2])
+end
+
+local default_viewmodel_sets = {
+    x = cvar.viewmodel_offset_x:get_float(),
+    y = cvar.viewmodel_offset_y:get_float(),
+    z = cvar.viewmodel_offset_z:get_float(),
+    fov = cvar.viewmodel_fov:get_float(),
+    active = false,
+}
+
+pui.accent = "9d4eddFF"
+
+local menu = {
+    lbl1 = pui.label("AA", "Anti-aimbot angles", "Project John \b8d9bbc\b313847FF[dev edition]"),
+    lbl2 = pui.label("AA", "Anti-aimbot angles", "Release \v[dev]"),
+    enable = pui.checkbox("AA", "Anti-aimbot angles", "Enable script"),
+    tab = pui.combobox("AA", "Anti-aimbot angles", "sections", {"\affc0cbFFMAIN", "-- Anti-aim", "-- visuals & miscellaneous", "-- configs"}),
+    tab_fl = pui.combobox("AA", "Fake lag", "sections", {"\affc0cbFFOTHER","-- fake lag", "-- binds"}),
+
+    
+    
+
+    -- nav_selector = pui.listbox("AA", "Anti-aimbot angles", "Navigation", {"global", "Anti-aim", "visuals & miscellaneous", "configs"}),
+    fl_nav_selector = pui.listbox("AA", "Other", "Navigation", {"\affc0cbFFMAIN", "-- Anti-aim", "-- visuals & miscellaneous", "-- configs", "\affc0cbFFOTHER", "-- fake lag", "-- binds"}),
+
+    fake_lag_amount = pui.combobox("AA", "Fake lag", "Amount ", {"Dynamic", "Maximum", "Fluctuate"}),
+    fake_lag_variance = pui.slider("AA", "Fake lag", "Variance ", 0, 100, 1, true, "%"),
+    fake_lag_limit = pui.slider("AA", "Fake lag", "Limit ", 1, 15, 15),
+
+    mode = pui.combobox("AA", "Anti-aimbot angles", "Mode", {"Builder", "Preset"}),
+    state = pui.combobox("AA", "Anti-aimbot angles", "State", lua.conds),
+    preset_list = pui.listbox("AA", "Anti-aimbot angles", "Preset", {"Test", "Chester's Cider"}),
+    builder = {},
+    aa_options = {
+        yaw_base = pui.checkbox("AA", "Fake lag", "At target"),
+        hide_yaw_override = pui.checkbox("AA", "Fake lag", "Hide yaw-overrides"),
+        manual_base = pui.combobox("AA", "Fake lag", "Manual base", {"None", "Left", "Backward", "Right", "Forward"}),
+        left = pui.hotkey("AA", "Fake lag", "Left manual"),
+        backward = pui.hotkey("AA", "Fake lag", "Backward manual"),
+        right = pui.hotkey("AA", "Fake lag", "Right manual"),
+        forward = pui.hotkey("AA", "Fake lag", "Forward manual"),
+        static_on_manual = pui.checkbox("AA", "Fake lag", "Static yaw override"),
+        defensive_on_manual = pui.checkbox("AA", "Fake lag", "Defensive yaw override"),
+        -- on_peek_or_always_on_manual = pui.combobox("AA", "Fake lag", "Defensive trigger", {"On peek", "Always on"}),
+        funny_warmup = pui.checkbox("AA", "Fake lag", "Funny warmup"),
+        freestand = pui.hotkey("AA", "Fake lag", "Freestand"),
+        freestand_cond = pui.multiselect("AA", "Fake lag", "Freestand-work", lua.conds_no_g),
+
+        defensive = pui.checkbox("AA", "Fake lag", "Defensive anti-aim enable"),
+        static_on_def = pui.checkbox("AA", "Fake lag", "Static on Defensive anti-aim"),
+        secret_exploit = pui.checkbox("AA", "Fake lag", "\aFFA500FFSecret exploit"),
+        safe_head = pui.checkbox("AA", "Fake lag", "Safe head"),
+    },
+    visuals = {
+        indicators = pui.checkbox("AA", "Anti-aimbot angles", "HUD center widgets"),
+        indicator_y = pui.slider("AA", "Anti-aimbot angles", "HUD Y offset", 0, 200, 35),
+        ind_color = pui.color_picker("AA", "Anti-aimbot angles", "HUD accent", 157,78,221,255),
+        logs = pui.checkbox("AA", "Anti-aimbot angles", "Console logs"),
+        logs_color1 = pui.color_picker("AA", "Anti-aimbot angles", "Accent color", 100,100,115,255),
+        screen_logs = pui.checkbox("AA", "Anti-aimbot angles", "Screen feed"),
+        screen_log_color = pui.color_picker("AA", "Anti-aimbot angles", "Feed accent", 157,78,221,255),
+        lbl3 = pui.label("AA", "Anti-aimbot angles", "Hit color (feed)"),
+        logs_color2 = pui.color_picker("AA", "Anti-aimbot angles", "Hit color", 150,150,215,255),
+        lbl4 = pui.label("AA", "Anti-aimbot angles", "Miss color (feed)"),
+        logs_color3 = pui.color_picker("AA", "Anti-aimbot angles", "Miss color", 200,120,120,255),
+        aspect_ratio_type = pui.combobox("AA", "Anti-aimbot angles", "Aspect ratio mode", {"Disabled", "Normal", "Newcomer"}),
+        normal_aspect_ratio = pui.slider("AA", "Anti-aimbot angles", "aspect ratio", 0, 200, 100, true, "%", 1, aspect_table),
+        newcomer_aspect_ratio = pui.slider("AA", "Anti-aimbot angles", "aspect ratio ", 0, 200, 177, true, "", 0.01),
+    },
+    misc = {
+        resolver = pui.checkbox("AA", "Anti-aimbot angles", "Resolver"),
+        aimtools_enable = pui.checkbox("AA", "Anti-aimbot angles", "Aimtools"),
+        aimtools = {
+            weapon = pui.combobox("AA", "Anti-aimbot angles", "Weapons", {"Desert Eagle", "SSG 08", "AWP"}),
+            deagle = {
+                mode1 = pui.multiselect("AA", "Anti-aimbot angles", "Desert Eagle Mode", {"If HP lower than X", "If lethal"}),
+                ifhp = pui.slider("AA", "Anti-aimbot angles", "Desert Eagle HP threshold", 1, 100, 50),
+                mode2 = pui.multiselect("AA", "Anti-aimbot angles", "Desert Eagle Override", {"Force Safe Point", "Prefer Safe Point", "Force Body Aim", "Prefer Body Aim"}),
+            },
+            ssg08 = {
+                mode1 = pui.multiselect("AA", "Anti-aimbot angles", "SSG-08 Mode", {"If HP lower than X", "If lethal"}),
+                ifhp = pui.slider("AA", "Anti-aimbot angles", "SSG-08 HP threshold", 1, 100, 50),
+                mode2 = pui.multiselect("AA", "Anti-aimbot angles", "SSG-08 Override", {"Force Safe Point", "Prefer Safe Point", "Force Body Aim", "Prefer Body Aim"}),
+            },
+            awp = {
+                mode1 = pui.multiselect("AA", "Anti-aimbot angles", "AWP Mode", {"If HP lower than X", "If lethal"}),
+                ifhp = pui.slider("AA", "Anti-aimbot angles", "AWP HP threshold", 1, 100, 50),
+                mode2 = pui.multiselect("AA", "Anti-aimbot angles", "AWP Override", {"Force Safe Point", "Prefer Safe Point", "Force Body Aim", "Prefer Body Aim"}),
+            },
+        },
+        dt_recharge = pui.checkbox("AA", "Anti-aimbot angles", "DT recharge"),
+        fast_ladder = pui.checkbox("AA", "Anti-aimbot angles", "Fast ladder"),
+        avoid_backstab = pui.checkbox("AA", "Anti-aimbot angles", "Avoid backstab"),
+        teammate_whitelist = pui.checkbox("AA", "Anti-aimbot angles", "Allowing teammates shared-ESP"),
+        cvar_optimizer = pui.multiselect("AA", "Anti-aimbot angles", "Cvar optimizer", fps_menu),
+        filter_console = pui.checkbox("AA", "Anti-aimbot angles", "Filterconsole"),
+        viewmodel_enable = pui.checkbox("AA", "Anti-aimbot angles", "View model"),
+        viewmodel = {
+            x = pui.slider("AA", "Anti-aimbot angles", "Viewmodel x", -100, 100, cvar.viewmodel_offset_x:get_int() * 10, true, "", 0.1, true),
+            y = pui.slider("AA", "Anti-aimbot angles", "Viewmodel y", -100, 100, cvar.viewmodel_offset_y:get_int() * 10, true, "", 0.1, true),
+            z = pui.slider("AA", "Anti-aimbot angles", "Viewmodel z", -100, 100, cvar.viewmodel_offset_z:get_int() * 10, true, "", 0.1, true),
+            fov = pui.slider("AA", "Anti-aimbot angles", "Viewmodel fov", 0, 120, cvar.viewmodel_fov:get_int()),
+        },
+        animfix = pui.multiselect("AA", "Anti-aimbot angles", "Animbreakers!", {"Legs", "Jumping", "Dirty sprite"}),
+        debug = pui.checkbox("AA", "Anti-aimbot angles", "Developer mode"),
+    },
+    cfg = {
+        list = pui.listbox("AA", "Anti-aimbot angles", "Profiles", base.name),
+        name = pui.textbox("AA", "Anti-aimbot angles", "Profile name"),
+        load = pui.button("AA", "Anti-aimbot angles", "Load profile", function() load() end),
+        saveing = pui.button("AA", "Anti-aimbot angles", "Save profile", function() save() end),
+        create = pui.button("AA", "Anti-aimbot angles", "\v+\r New profile", function() create() end),
+        delete = pui.button("AA", "Anti-aimbot angles", "\v-\r Remove profile", function() delete() end),
+        import = pui.button("AA", "Anti-aimbot angles", "Import profile (clipboard)", function() import() end),
+        export = pui.button("AA", "Anti-aimbot angles", "Export profile (clipboard)", function() export() end),
+    },
+}
+
+menu.tab:set_visible(false)
+menu.tab_fl:set_visible(false)
+
+menu.fake_lag_amount:depend(menu.enable, {menu.tab_fl, "-- fake lag"})
+menu.fake_lag_variance:depend(menu.enable, {menu.tab_fl, "-- fake lag"})
+menu.fake_lag_limit:depend(menu.enable, {menu.tab_fl, "-- fake lag"})
+
+ 
+
+-- New navigation logic
+-- menu.nav_selector:depend(menu.enable, {menu.tab, "global"})
+-- menu.nav_selector:set_callback(function()
+--     local idx = menu.nav_selector:get()
+--     local options = {"global", "Anti-aim", "visuals & miscellaneous", "configs"}
+--     menu_seta(options[idx + 1])
+-- end)
+
+menu.fl_nav_selector:depend(menu.enable)
+menu.fl_nav_selector:set_callback(function()
+    local idx = menu.fl_nav_selector:get()
+    if idx <= 3 then
+        local main = {"MAIN", "-- Anti-aim", "-- visuals & miscellaneous", "-- configs"}
+        if idx == 0 then -- MAIN
+            menu.fl_nav_selector:set(1) -- Переключаем на Anti-aim
+            menu_seta("-- Anti-aim")
+        else
+            menu_seta(main[idx + 1])
+        end
+    else
+        local fl = {"OTHER", "-- fake lag", "-- binds"}
+        if idx == 4 then -- OTHER
+            menu.fl_nav_selector:set(5) -- Переключаем на fake lag
+            menu_seta_fl("-- fake lag")
+        else
+            menu_seta_fl(fl[idx - 3])
+        end
+    end
+end)
+
+-- legacy buttons removed
+
+
+function menu_seta_fl(val)
+    menu.tab_fl:set(val)
+end
+
+function menu_seta(val)
+    menu.tab:set(val)
+end
+
+function viewmodel_set()
+    if menu.misc.viewmodel_enable:get() then
+        if default_viewmodel_sets.active == false then
+            default_viewmodel_sets.x = cvar.viewmodel_offset_x:get_float()
+            default_viewmodel_sets.y = cvar.viewmodel_offset_y:get_float()
+            default_viewmodel_sets.z = cvar.viewmodel_offset_z:get_float()
+            default_viewmodel_sets.fov = cvar.viewmodel_fov:get_float()
+            default_viewmodel_sets.active = true
+        end
+        client.set_cvar("viewmodel_offset_x", menu.misc.viewmodel.x:get() / 10)
+        client.set_cvar("viewmodel_offset_y", menu.misc.viewmodel.y:get() / 10)
+        client.set_cvar("viewmodel_offset_z", menu.misc.viewmodel.z:get() / 10)
+        client.set_cvar("viewmodel_fov", menu.misc.viewmodel.fov:get())
+    else
+        default_viewmodel_sets.active = false
+        client.set_cvar("viewmodel_offset_x", default_viewmodel_sets.x)
+        client.set_cvar("viewmodel_offset_y", default_viewmodel_sets.y)
+        client.set_cvar("viewmodel_offset_z", default_viewmodel_sets.z)
+        client.set_cvar("viewmodel_fov", default_viewmodel_sets.fov)
+    end
+end
+
+menu.misc.viewmodel_enable:set_callback(function() viewmodel_set() end)
+menu.misc.viewmodel.x:set_callback(function() viewmodel_set() end)
+menu.misc.viewmodel.y:set_callback(function() viewmodel_set() end)
+menu.misc.viewmodel.z:set_callback(function() viewmodel_set() end)
+menu.misc.viewmodel.fov:set_callback(function() viewmodel_set() end)
+
+-- Callback для применения пресетов
+menu.preset_list:set_callback(function()
+    local selected_preset = menu.preset_list:get()
+    if selected_preset == 0 then -- Test preset
+        apply_test_preset()
+    elseif selected_preset == 1 then -- Chester's Cider preset
+        apply_chester_cider_preset()
+    end
+end)
+
+function fps_opt()
+    for i = 1, #fps_cvar_values do
+        if menu.misc.cvar_optimizer:get(fps_cvar_values[i][2]) then
+            cvar[fps_cvar_values[i][2]]:set_int(0)
+        else
+            cvar[fps_cvar_values[i][2]]:set_int(fps_cvar_values[i][1])
+        end
+    end
+end
+
+function filter_console()
+    if menu.misc.filter_console:get() then
+        cvar.con_filter_enable:set_int(1)
+        cvar.con_filter_text:set_string("IrWL5106TZZKNFPz4P4Gl3pSN?J370f5hi373ZjPg%VOVh6lN")
+        client.exec("con_filter_enable 1")
+    else
+        cvar.con_filter_enable:set_int(0)
+        cvar.con_filter_text:set_string("")
+        client.exec("con_filter_enable 0")
+    end
+end
+
+local en_debug = {menu.enable, function(self) if self:get() then return true else return false end end}
+local deb_debug = menu.misc.debug
+
+function set_menu_builder()
+    if ui.is_menu_open() then
+        if menu.enable:get() then
+            if menu.misc.debug:get() then
+                state = true
+            else
+                state = false
+            end
+        else
+            state = true
+        end
+        ref.fl_enable:set_visible(state)
+        ref.fl_limit:set_visible(state)
+        ref.fl_amount:set_visible(state)
+        ref.fl_var:set_visible(state)
+        ref.enabled:set_visible(state)
+        ref.pitch[1]:set_visible(state)
+        ref.pitch[2]:set_visible(state)
+        ref.yawbase:set_visible(state)
+        ref.yaw[1]:set_visible(state)
+        ref.yaw[2]:set_visible(state)
+        ref.fakeyawlimit[1]:set_visible(state)
+        ref.fakeyawlimit[2]:set_visible(state)
+        ref.fsbodyyaw:set_visible(state)
+        ref.edgeyaw:set_visible(state)
+        ref.yawjitter[1]:set_visible(state)
+        ref.yawjitter[2]:set_visible(state)
+        ref.freestand[1]:set_visible(state)
+        ref.roll[1]:set_visible(state)
+    end
+end
+
+client.set_event_callback("shutdown", function()
+    ref.enabled:set_visible(true)
+    ref.pitch[1]:set_visible(true)
+    ref.pitch[2]:set_visible(true)
+    ref.yawbase:set_visible(true)
+    ref.yaw[1]:set_visible(true)
+    ref.yaw[2]:set_visible(true)
+    ref.fakeyawlimit[1]:set_visible(true)
+    ref.fakeyawlimit[2]:set_visible(true)
+    ref.fsbodyyaw:set_visible(true)
+    ref.edgeyaw:set_visible(true)
+    ref.yawjitter[1]:set_visible(true)
+    ref.yawjitter[2]:set_visible(true)
+    ref.freestand[1]:set_visible(true)
+    ref.roll[1]:set_visible(true)
+end)
+
+menu.cfg.list:depend(menu.enable, {menu.tab, "-- configs"})
+menu.cfg.name:depend(menu.enable, {menu.tab, "-- configs"})
+menu.cfg.load:depend(menu.enable, {menu.tab, "-- configs"})
+menu.cfg.saveing:depend(menu.enable, {menu.tab, "-- configs"})
+menu.cfg.create:depend(menu.enable, {menu.tab, "-- configs"})
+menu.cfg.delete:depend(menu.enable, {menu.tab, "-- configs"})
+menu.cfg.import:depend(menu.enable, {menu.tab, "-- configs"})
+menu.cfg.export:depend(menu.enable, {menu.tab, "-- configs"})
+
+local manu = {
+    left = false,
+    backward = false,
+    right = false,
+    forward = false,
+    leftdump = 0,
+    backwarddump = 0,
+    rightdump = 0,
+    forwarddump = 0,
+}
+
+function manualing()
+    if(menu.aa_options.left:get()) then
+        if manu.leftdump <= 2 then
+            manu.leftdump = manu.leftdump + 1
+        end
+    else
+        manu.leftdump = 0
+    end
+    if(menu.aa_options.backward:get()) then
+        if manu.backwarddump <= 2 then
+            manu.backwarddump = manu.backwarddump + 1
+        end
+    else
+        manu.backwarddump = 0
+    end
+    if(menu.aa_options.right:get()) then
+        if manu.rightdump <= 2 then
+            manu.rightdump = manu.rightdump + 1
+        end
+    else
+        manu.rightdump = 0
+    end
+    if(menu.aa_options.forward:get()) then
+        if manu.forwarddump <= 2 then
+            manu.forwarddump = manu.forwarddump + 1
+        end
+    else
+        manu.forwarddump = 0
+    end
+    local poisk = math.huge
+    local minsh = 0
+    for i = 1, 4 do
+        if(i == 1) then
+            val = manu.leftdump
+        elseif(i == 2) then
+            val = manu.backwarddump
+        elseif(i == 3) then
+            val = manu.rightdump
+        elseif(i == 4) then
+            val = manu.forwarddump
+        end
+        if(val < poisk and val ~= 0) then
+            poisk = val
+            minsh = i
+        end
+    end
+    if(minsh ~= 0) then
+        if(poisk == 1) then
+            if(minsh == 1) then
+                if(menu.aa_options.manual_base:get() ~= "Left") then
+                    menu.aa_options.manual_base:set("Left")
+                elseif(menu.aa_options.manual_base:get() == "Left") then
+                    menu.aa_options.manual_base:set("None")
+                end
+            elseif(minsh == 2) then
+                if(menu.aa_options.manual_base:get() ~= "Backward") then
+                    menu.aa_options.manual_base:set("Backward")
+                elseif(menu.aa_options.manual_base:get() == "Backward") then
+                    menu.aa_options.manual_base:set("None")
+                end
+            elseif(minsh == 3) then
+                if(menu.aa_options.manual_base:get() ~= "Right") then
+                    menu.aa_options.manual_base:set("Right")
+                elseif(menu.aa_options.manual_base:get() == "Right") then
+                    menu.aa_options.manual_base:set("None")
+                end
+            elseif(minsh == 4) then
+                if(menu.aa_options.manual_base:get() ~= "Forward") then
+                    menu.aa_options.manual_base:set("Forward")
+                elseif(menu.aa_options.manual_base:get() == "Forward") then
+                    menu.aa_options.manual_base:set("None")
+                end
+            end
+        end
+    end
+end
+
+function fast_ladder(cmd, lp)
+    local pitch, yaw = client.camera_angles()
+    if (entity.get_prop(lp, "m_MoveType") == 9) then
+        cmd.yaw = math.floor(cmd.yaw + 0.5)
+        cmd.roll = 0
+        if cmd.forwardmove > 0 then
+            if pitch < 45 then
+                cmd.pitch = 89
+                cmd.in_moveright = 1
+                cmd.in_moveleft = 0
+                cmd.in_forward = 0
+                cmd.in_back = 1
+                if cmd.sidemove == 0 then
+                    cmd.yaw = cmd.yaw + 90
+                end
+                if cmd.sidemove < 0 then
+                    cmd.yaw = cmd.yaw + 150
+                end
+                if cmd.sidemove > 0 then
+                    cmd.yaw = cmd.yaw + 30
+                end
+            end 
+        end
+        if cmd.forwardmove < 0 then
+            cmd.pitch = 89
+            cmd.in_moveleft = 1
+            cmd.in_moveright = 0
+            cmd.in_forward = 1
+            cmd.in_back = 0
+            if cmd.sidemove == 0 then
+                cmd.yaw = cmd.yaw + 90
+            end
+            if cmd.sidemove > 0 then
+                cmd.yaw = cmd.yaw + 150
+            end
+            if cmd.sidemove < 0 then
+                cmd.yaw = cmd.yaw + 30
+            end
+        end
+    end
+end
+
+
+local en = {menu.enable, true}
+local menutab = {menu.tab, "-- Anti-aim"}
+local misctab = {menu.tab, "-- visuals & miscellaneous"}
+local visuals = {menu.tab, "-- visuals & miscellaneous"}
+
+menu.mode:depend(en, menutab, aa_options)
+menu.state:depend(en, menutab, aa_options, {menu.mode, "Builder"})
+menu.preset_list:depend(en, menutab, aa_options, {menu.mode, "Preset"})
+
+menu.aa_options.yaw_base:depend(en, {menu.tab_fl, "-- binds"})
+menu.aa_options.hide_yaw_override:depend(en, {menu.tab_fl, "-- binds"})
+menu.aa_options.manual_base:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.left:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.backward:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.right:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.forward:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.static_on_manual:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.defensive_on_manual:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+-- menu.aa_options.on_peek_or_always_on_manual:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.funny_warmup:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.freestand:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+menu.aa_options.freestand_cond:depend(en, {menu.tab_fl, "-- binds"}, {menu.aa_options.hide_yaw_override, false})
+
+menu.aa_options.defensive:depend(en, {menu.tab_fl, "-- binds"})
+menu.aa_options.static_on_def:depend(en, {menu.tab_fl, "-- binds"})
+menu.aa_options.secret_exploit:depend(en, {menu.tab_fl, "-- binds"})
+menu.aa_options.safe_head:depend(en, {menu.tab_fl, "-- binds"})
+
+menu.misc.resolver:depend(en, misctab)
+menu.misc.aimtools_enable:depend(en, misctab)
+menu.misc.aimtools.weapon:depend(en, misctab, menu.misc.aimtools_enable)
+menu.misc.aimtools.deagle.mode1:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "Desert Eagle"})
+menu.misc.aimtools.deagle.ifhp:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.deagle.mode1, "If HP lower than X"}, {menu.misc.aimtools.weapon, "Desert Eagle"})
+menu.misc.aimtools.deagle.mode2:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "Desert Eagle"})
+menu.misc.aimtools.ssg08.mode1:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "SSG 08"})
+menu.misc.aimtools.ssg08.ifhp:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.ssg08.mode1, "If HP lower than X"}, {menu.misc.aimtools.weapon, "SSG 08"})
+menu.misc.aimtools.ssg08.mode2:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "SSG 08"})
+menu.misc.aimtools.awp.mode1:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "AWP"})
+menu.misc.aimtools.awp.ifhp:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.awp.mode1, "If HP lower than X"}, {menu.misc.aimtools.weapon, "AWP"})
+menu.misc.aimtools.awp.mode2:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "AWP"})
+menu.misc.dt_recharge:depend(en, misctab)
+menu.misc.fast_ladder:depend(en, misctab)
+menu.misc.avoid_backstab:depend(en, misctab)
+menu.misc.teammate_whitelist:depend(en, misctab)
+menu.misc.debug:depend(en, misctab)
+menu.misc.animfix:depend(en, misctab)
+menu.misc.cvar_optimizer:depend(en, misctab)
+menu.misc.filter_console:depend(en, misctab)
+menu.misc.viewmodel_enable:depend(en, misctab)
+menu.misc.viewmodel.x:depend(en, misctab, menu.misc.viewmodel_enable)
+menu.misc.viewmodel.y:depend(en, misctab, menu.misc.viewmodel_enable)
+menu.misc.viewmodel.z:depend(en, misctab, menu.misc.viewmodel_enable)
+menu.misc.viewmodel.fov:depend(en, misctab, menu.misc.viewmodel_enable)
+
+menu.aa_options.defensive:set_visible(false)
+menu.aa_options.static_on_def:set_visible(false)
+menu.aa_options.secret_exploit:set_visible(false)
+menu.visuals.indicators:depend(en, visuals)
+menu.visuals.indicator_y:depend(en, visuals, menu.visuals.indicators)
+menu.visuals.ind_color:depend(en, visuals, menu.visuals.indicators)
+menu.visuals.logs:depend(en, visuals)
+menu.visuals.logs_color1:depend(en, visuals, menu.visuals.logs)
+menu.visuals.screen_logs:depend(en, visuals, menu.visuals.logs)
+menu.visuals.screen_log_color:depend(en, visuals, menu.visuals.logs)
+menu.visuals.lbl3:depend(en, visuals, menu.visuals.logs)
+menu.visuals.logs_color2:depend(en, visuals, menu.visuals.logs)
+menu.visuals.lbl4:depend(en, visuals, menu.visuals.logs)
+menu.visuals.logs_color3:depend(en, visuals, menu.visuals.logs)
+menu.visuals.aspect_ratio_type:depend(en, visuals)
+menu.visuals.normal_aspect_ratio:depend(en, visuals, {menu.visuals.aspect_ratio_type, "Normal"})
+menu.visuals.newcomer_aspect_ratio:depend(en, visuals, {menu.visuals.aspect_ratio_type, "Newcomer"})
+
+function aspect_ratio()
+    if menu.visuals.aspect_ratio_type:get() ~= "Disabled" and menu.enable:get() then
+        if menu.visuals.aspect_ratio_type:get() == "Normal" then
+            local mult = menu.visuals.normal_aspect_ratio:get() * 0.01
+            mult = 2 - mult
+            local screen_width, screen_height = client.screen_size()
+            local aspectratio_value = (screen_width * mult) / screen_height
+        
+            if mult == 1 then
+                aspectratio_value = 0
+            end
+            client.set_cvar("r_aspectratio", tonumber(aspectratio_value))
+        else
+            local mult = menu.visuals.newcomer_aspect_ratio:get() * 0.01
+            client.set_cvar("r_aspectratio", mult)
+        end
+    else
+        client.set_cvar("r_aspectratio", 0)
+    end
+end
+
+for i = 1, (#lua.conds - 1) do
+    local dobavok = "\a3d4355FF" .. lua.short_conds[i] .. "\r "
+    local dobavok_d = "\a3d4355FF" .. lua.short_conds[i] .. " [D]\r "
+    menu.builder[i] = {
+        enable = pui.checkbox("AA", "Anti-aimbot angles", "\a3d4355FF" .. lua.conds[i] .. "\r State enable"),
+        pitch = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Pitch", {"Off", "Down", "Up"}),
+        yaw_default = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Yaw-offset", -180, 180, 0),
+        yaw_add = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Yaw-add", {"Off", "Left & right"}),
+        yaw_left = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Yaw-add left", -180, 180, 0),
+        yaw_right = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Yaw-add right", -180, 180, 0),
+        yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Yaw", {"Center", "Slow", "Advanced skitter"}),
+        yaw_center = pui.slider("AA", "Anti-aimbot angles", "\n" .. "\a00000000" .. lua.conds[i] .. "Yaw", -180, 180, 0),
+        yaw_randomize = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Randomize", 0, 100, 0, 1, "%"),
+        double_tick_update = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Double tick-update"),
+        tick_update = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Tick-update", 0, 14, 2),
+        tick_update_second = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Tick-update second", 0, 14, 2),
+        body_yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Body yaw", {"Off", "Jitter", "Smart", "Opposite"}),
+        body_yaw_degree = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Fake yaw", -180, 180, 0),
+        defensive = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Defensive aa"),
+        d_pitch = pui.combobox("AA", "Anti-aimbot angles", dobavok_d .. "Pitch", {"Static", "Lerp", "Random", "Jitter", "Sway"}),
+        d_pitch_degree = pui.slider("AA", "Anti-aimbot angles", "\n" .. "\a00000000" .. lua.conds[i] .. dobavok_d .. "pitch degree", -89, 89, 50),
+        d_pitch_range = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Pitch range", 0, 180, 50),
+        d_pitch_speed = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Pitch change speed", 0, 90, 0),
+        d_pitch_skip = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Skip ticks", 0, 24, 0),
+        d_pitch_random_skip = pui.checkbox("AA", "Anti-aimbot angles", dobavok_d .. "Random skip"),
+        d_pitch_skip_min = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Skip min", 0, 24, 0),
+        d_pitch_skip_max = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Skip max", 0, 24, 12),
+        d_pitch_random_min = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Random min", -89, 89, -89),
+        d_pitch_random_max = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Random max", -89, 89, 89),
+        d_pitch_random_delay = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Random delay", 0, 24, 0),
+        d_pitch_random_delay_enable = pui.checkbox("AA", "Anti-aimbot angles", dobavok_d .. "Random delay enable"),
+        d_pitch_random_delay_min = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Random delay min", 0, 24, 0),
+        d_pitch_random_delay_max = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Random delay max", 0, 24, 12),
+        d_yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok_d .. "Yaw", {"Freestand", "Forward", "Spin", "180 z", "Slow spin", "Sideways", "Random", "Sin", "Flick"}),
+        d_tick_update = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Tick-update", 0, 14, 2),
+        d_offset = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Defensive yaw-offset", -180, 180, 0),
+    }
+    if i ~= 1 and i ~= 8 then
+        menu.builder[i].enable:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]})
+    else
+        menu.builder[i].enable:set_visible(menu.misc.debug:get())
+    end
+    menu.builder[i].pitch:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
+    menu.builder[i].yaw_default:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
+    menu.builder[i].yaw:depend(en,menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
+    menu.builder[i].double_tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"})
+    menu.builder[i].tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"})
+    menu.builder[i].tick_update_second:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"}, menu.builder[i].double_tick_update)
+    menu.builder[i].yaw_center:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Off", true})
+    menu.builder[i].yaw_randomize:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Off", true})
+    menu.builder[i].yaw_add:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
+    menu.builder[i].yaw_left:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw_add, "Left & right"})
+    menu.builder[i].yaw_right:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw_add, "Left & right"})
+    menu.builder[i].body_yaw:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
+    menu.builder[i].body_yaw_degree:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].body_yaw, "Jitter"})
+    menu.builder[i].defensive:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive)
+    menu.builder[i].d_pitch:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive)
+    menu.builder[i].d_pitch_degree:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, function() return menu.builder[i].d_pitch:get() == "Static" or menu.builder[i].d_pitch:get() == "Sway" end})
+    menu.builder[i].d_pitch_range:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Sway"})
+    menu.builder[i].d_pitch_speed:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Sway"})
+    menu.builder[i].d_pitch_skip:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Sway"}, {menu.builder[i].d_pitch_random_skip, false})
+    menu.builder[i].d_pitch_random_skip:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Sway"})
+    menu.builder[i].d_pitch_skip_min:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Sway"}, menu.builder[i].d_pitch_random_skip)
+    menu.builder[i].d_pitch_skip_max:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Sway"}, menu.builder[i].d_pitch_random_skip)
+    menu.builder[i].d_pitch_random_min:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Random"})
+    menu.builder[i].d_pitch_random_max:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Random"})
+    menu.builder[i].d_pitch_random_delay:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Random"}, {menu.builder[i].d_pitch_random_delay_enable, false})
+    menu.builder[i].d_pitch_random_delay_enable:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Random"})
+    menu.builder[i].d_pitch_random_delay_min:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Random"}, menu.builder[i].d_pitch_random_delay_enable)
+    menu.builder[i].d_pitch_random_delay_max:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Random"}, menu.builder[i].d_pitch_random_delay_enable)
+    menu.builder[i].d_yaw:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive)
+    menu.builder[i].d_tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_yaw, "Sideways"})
+    menu.builder[i].d_offset:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive)
+end
+
+local indacfg = pui.setup({menu.builder, menu.aa_options, menu.misc, menu.visuals})
+
+function load()
+    local val = menu.cfg.list:get() + 1
+    indacfg:load(base.cfg[val])
+    print("[preset] profile loaded")
+end
+
+function save()
+    local val = menu.cfg.list:get() + 1
+    local nameindabox = menu.cfg.name:get()
+    if nameindabox ~= "" then
+        base.name[val] = nameindabox
+    end
+    base.cfg[val] = indacfg:save()
+    database.write("peremogaboiii.base", base)
+    menu.cfg.list:update(base.name)
+    print("[preset] profile saved")
+end
+
+function create()
+    local nameindabox = menu.cfg.name:get()
+    if(nameindabox == "") then
+        name = "new config"
+    else
+        name = nameindabox
+    end
+
+    table.insert(base.name, name)
+    table.insert(base.cfg, indacfg:save())
+    database.write("peremogaboiii.base", base)
+    menu.cfg.list:update(base.name)
+    print("[preset] profile created")
+end
+
+function delete()
+    local val = menu.cfg.list:get() + 1
+    if(val ~= 1 or #base.name > 1) then
+        table.remove(base.name, val)
+        table.remove(base.cfg, val)
+    end
+
+    database.write("peremogaboiii.base", base)
+    menu.cfg.list:update(base.name)
+    print("[preset] profile deleted")
+end
+
+function import()
+    local cfg = clipboard.get()
+    indacfg:load(json.parse(base64.decode(cfg)))
+    print("[preset] profile imported")
+end
+
+function export()
+    clipboard.set(base64.encode(json.stringify(indacfg:save())))
+    print("[preset] profile exported")
+end
+
+menu.builder[1].enable:set(true)
+
+local player = {
+    get_velocity = function(ent)
+        return vector(entity.get_prop(ent, "m_vecVelocity")):length()
+    end,
+
+    get_vec_velocity = function(ent)
+        return vector(entity.get_prop(ent, "m_vecVelocity"))
+    end,
+
+    in_air = function(_ent)
+        local flags = entity.get_prop(_ent, "m_fFlags")
+
+        if bit.band(flags, 1) == 0 then
+            return true
+        end
+        
+        return false
+    end,
+
+    in_duck = function(_ent)
+        local flags = entity.get_prop(_ent, "m_fFlags")
+        
+        if bit.band(flags, 4) == 4 then
+            return true
+        end
+        
+        return false
+    end,
+
+    is_real = function(_ent)
+        if(_ent ~= nil and entity.is_alive(_ent)) then
+            return true
+        else
+            return false
+        end
+    end,
+
+    dist_2d = function(_ent, other_player)
+        if _ent ~= nil and other_player ~= nil then
+            local x, y = entity.get_origin(_ent)
+            local x2, y2 = entity.get_origin(other_player)
+            if x ~= nil and y ~= nil and x2 ~= nil and y2 ~= nil then
+                local dist = math.sqrt((x - x2)^2 + (y - y2)^2)
+                return dist
+            else
+                return math.huge
+            end
+        else
+            return math.huge
+        end
+    end,
+}
+
+local times_to_tick = function(val)
+    return globals.tickinterval() * val
+end
+
+local lp_data = {
+    jumping = false,
+    ground = false,
+    in_speed = false,
+    weapon = 0,
+    pos = vector(),
+    left_desync_vec = vector(),
+    right_desync_vec = vector(),
+}
+
+local target_data = {
+    pos = vector(),
+    speed = 0,
+    weapon = 0,
+    en_num = 0,
+}
+
+local ind = {
+    alpha = 0,
+    pulse = {
+        alpha = 0,
+        toggle = false,
+    },
+    dt_alpha = 0,
+    dt_state = "",
+    dt_charge_alpha = 0,
+    dt_wait_alpha = 0,
+    scoped = {
+        name = 0,
+        state = 0,
+        state_name = "MENU",
+        doubletap = 0,
+        freestand = 0,
+        hideshots = 0,
+    },
+    hide_state = "READY",
+    zoomed = false,
+    tickbase = 0,
+    fr_alpha = 0,
+    ideal_pick = 0,
+    hide_alpha = 0,
+    hide_charging_alpha = 0,
+    hide_ready_alpha = 0,
+}
+
+function update_data(cmd, lp, target)
+    lp_data.ground = bit.band(entity.get_prop(lp, "m_fFlags"), 1) == 1
+    lp_data.jumping = cmd.in_jump == 1
+    lp_data.in_speed = bit.band(cmd.buttons, 131072) > 0
+    lp_data.weapon = entity.get_classname(entity.get_prop(lp, "m_hActiveWeapon"))
+    lp_data.pos = vector(entity.get_prop(lp, "m_vecOrigin"))
+    if target then
+        target_data.pos = vector(entity.get_prop(target, "m_vecOrigin"))
+        target_data.speed = vector(player.get_velocity(target))
+        target_data.weapon = entity.get_classname(entity.get_prop(target, "m_hActiveWeapon"))
+        target_data.en_num = target
+    else
+        target_data.en_num = nil
+    end
+end
+
+function body_freestand(lp)
+    if not player.is_real(lp) or not target_data.en_num then
+        return
+    end
+    local l_velo = player.get_vec_velocity(lp)
+    local e_velo = player.get_vec_velocity(target_data.en_num)
+    local time_extra = times_to_tick(12)
+    local l_pos = vector(lp_data.pos.x + l_velo.x * time_extra / 3, lp_data.pos.y + l_velo.y * time_extra / 3, lp_data.pos.z)
+    local e_pos = vector(target_data.pos.x + e_velo.x * time_extra, target_data.pos.y + e_velo.y * time_extra, target_data.pos.z)
+    local angle_to_enemy = calculate_angle(lp_data.pos, e_pos)
+    lp_data.left_desync_vec = vector(l_pos.x + math.cos(math.rad(angle_to_enemy - 90)) * 35, l_pos.y + math.sin(math.rad(angle_to_enemy - 90)) * 35, l_pos.z + 45)
+    lp_data.right_desync_vec = vector(l_pos.x + math.cos(math.rad(angle_to_enemy + 90)) * 35, l_pos.y + math.sin(math.rad(angle_to_enemy + 90)) * 35, l_pos.z + 45)
+    local first_ent, damage_left = client.trace_bullet(target_data.en_num, e_pos.x, e_pos.y, e_pos.z, lp_data.left_desync_vec.x, lp_data.left_desync_vec.y, lp_data.left_desync_vec.z, true)
+    local secon_ent, damage_right = client.trace_bullet(target_data.en_num, e_pos.x, e_pos.y, e_pos.z, lp_data.right_desync_vec.x, lp_data.right_desync_vec.y, lp_data.right_desync_vec.z, true)
+    if damage_right > damage_left then
+        return "right"
+    elseif damage_right < damage_left then
+        return "left"
+    else
+        return "none"
+    end
+end
+
+player.get_state = function(cmd, ent)
+    local states = {
+        {
+            index = 6,
+            condition = "crouching",
+            work = function()
+                return (lp_data.jumping == false and lp_data.ground == true) and cmd.in_duck == 1 or ref.fakeduck:get()
+            end,
+        },
+        {
+            index = 5,
+            name = "jump-crouching",
+            work = function() 
+                return (lp_data.jumping == true or lp_data.ground == false) and cmd.in_duck == 1
+            end,
+        },
+        {
+            index = 4,
+            name = "jumping",
+            work = function() 
+                return (lp_data.jumping == true or lp_data.ground == false) and cmd.in_duck == 0
+            end,
+        },
+        {
+            index = 3,
+            name = "slow-walking",
+            work = function() 
+                return lp_data.in_speed
+            end,
+        },
+        {
+            index = 2,
+            name = "moving",
+            work = function() 
+                return vector(entity.get_prop(ent, 'm_vecVelocity')):length2d() > 3 and bit.band(entity.get_prop(ent, "m_fFlags"), 1) == 1
+            end,
+        },
+        {
+            index = 1,
+            name = "standing",
+            work = function() 
+                return vector(entity.get_prop(ent, 'm_vecVelocity')):length2d() < 3 
+            end,
+        },
+    }
+    for i, condition in ipairs(states) do
+        if condition.work() then
+            return condition.index
+        end
+    end
+    return 0
+end
+
+local avoid_backstab = function(lp, enemy)
+    if not enemy or entity.is_dormant(enemy) then
+        return
+    end;
+    local enemy_origin = { entity.get_origin(target_data.en_num) }
+    local enemy_view = { entity.get_prop(target_data.en_num, "m_vecViewOffset") }
+    local eye_pos = { client.eye_position() }
+    local random_wraith_shit = { enemy_origin[1] + enemy_view[1], enemy_origin[2] + enemy_view[2], enemy_origin[3] + enemy_view[3] }
+    local dist = { math.abs(random_wraith_shit[1] - eye_pos[1]), math.abs(random_wraith_shit[2] - eye_pos[2]), math.abs(random_wraith_shit[3] - eye_pos[3]) }
+    local l2dist = math.abs(dist[1] + dist[2])
+    if l2dist > 425 then
+        return
+    end;
+    local lp_velo = { entity.get_prop(lp, 'm_vecVelocity') }
+    local enemy_velo = { entity.get_prop(target_data.en_num, 'm_vecVelocity') }
+    local extra_tick = times_to_tick(16)
+    local extra_pos = { eye_pos[1] + lp_velo[1] * extra_tick, eye_pos[2] + lp_velo[2] * extra_tick, eye_pos[3] + lp_velo[3] * extra_tick }
+    local extra_enemy_pos = { random_wraith_shit[1] + enemy_velo[1] * extra_tick, random_wraith_shit[2] + enemy_velo[2] * extra_tick, random_wraith_shit[3] + enemy_velo[3] * extra_tick }
+    local L571, L572 = client.trace_line(lp, extra_pos[1], extra_pos[2], extra_pos[3], extra_enemy_pos[1], extra_enemy_pos[2], extra_enemy_pos[3])
+    local L573, L574 = client.trace_line(lp, extra_enemy_pos[1], extra_enemy_pos[2], extra_enemy_pos[3], extra_pos[1], extra_pos[2], extra_pos[3])
+    local L575, L576 = client.trace_line(lp, eye_pos[1], eye_pos[2], eye_pos[3], random_wraith_shit[1], random_wraith_shit[2], random_wraith_shit[3])
+    local L577, L578 = client.trace_line(lp, eye_pos[1], eye_pos[2], eye_pos[3], enemy_origin[1], enemy_origin[2], enemy_origin[3])
+    local L579 = L572 == enemy or L571 == 1;
+    local L580 = L574 == lp or L573 == 1;
+    local L581 = L576 == enemy or L575 == 1;
+    local L582 = L578 == enemy or L577 == 1;
+    local enemies_weapon = target_data.weapon
+    if enemies_weapon == "CKnife" and (L579 or L580 or L581 or L582) then
+        return true
+    end
+    return false
+end
+
+local ram = {
+    yaw = 0,
+    manual_base = 0,
+    aa_tickrate = 0,
+    jitter = false,
+    yaw_add = 0,
+    inverted = false,
+    random_add = 0,
+    last_sim_time = 0,
+    tick_def_off = 0,
+    spin = 0,
+
+    defensive_work = false,
+    pitch_min = -45,
+    pitch_max = 45,
+    anti_aim = {
+        pitch = 0,
+        yaw = 0,
+        manual = 0,
+        jitter = 0,
+        add = 0,
+        fake = 0,
+        freestand = false,
+        cheat_yaw = "Off",
+        cheat_jitter = 0,
+        cheat_body = "Off",
+        random_add = 0,
+        at_target = false,
+        jitter_update = false,
+        freestand_active = false,
+
+
+        fl_limit = 14,
+        jit_tick_left = 0,
+        jit_tick_right = 0,
+        fsbodyyaw = 0,
+        side = false,
+    },
+    def_jitter = false,
+    manual_active = 0,
+    tickbase = 0,
+    defensive = {
+        pitch_update = false,
+        pitch_phase = 0,
+        local_side = "left",
+    },
+}
+
+
+local desync = 0
+local max = 0
+local modifier = 0
+
+function is_freestand(lp)
+    local enemy_player = client.current_threat()
+    if not lp or not enemy_player then return false end
+    local e_pos = vector(entity.get_prop(enemy_player, "m_vecOrigin"))
+    if not lp_data.pos or not e_pos then return false end
+    local angle_to_enemy = calculate_angle(lp_data.pos, e_pos)
+    local local_yaw = entity.get_prop(lp, "m_flLowerBodyYawTarget")
+    local angle = math.floor(normalize_yaw(local_yaw - angle_to_enemy))
+    if angle <= -89 and angle >= -91 or angle >= 89 and angle <= 91 then
+        return true
+    else
+        return false
+    end
+end
+
+local function yaw_manager(side, left, right)
+    return side and left or (side and 0 or right)
+end
+
+local function normalize_pitch(val)
+    if(val > 89) then
+        val = val - 89 * 2
+    elseif(val < -89) then
+        val = val + 89 * 2
+    end
+    return val
+end
+
+local function get_freestand_direction (player)
+    local data = {
+        side = 1,
+        last_side = 0,
+        last_hit = 0,
+        hit_side = 0
+    }
+
+    if not player or entity.get_prop(player, 'm_lifeState') ~= 0 then
+        return
+    end
+
+    if data.hit_side ~= 0 and globals.curtime() - data.last_hit > 5 then
+        data.last_side = 0
+        data.last_hit = 0
+        data.hit_side = 0
+    end
+
+    local eye = vector(client.eye_position())
+    local ang = vector(client.camera_angles())
+    local trace_data = {left = 0, right = 0}
+
+    for i = ang.y - 120, ang.y + 120, 30 do
+        if i ~= ang.y then
+            local rad = math.rad(i)
+            local px, py, pz = eye.x + 256 * math.cos(rad), eye.y + 256 * math.sin(rad), eye.z
+            local fraction = client.trace_line(player, eye.x, eye.y, eye.z, px, py, pz)
+            local side = i < ang.y and 'left' or 'right'
+            trace_data[side] = trace_data[side] + fraction
+        end
+    end
+
+    data.side = trace_data.left < trace_data.right and -1 or 1
+
+    if data.side == data.last_side then
+        return
+    end
+
+    data.last_side = data.side
+
+    if data.hit_side ~= 0 then
+        data.side = data.hit_side
+    end
+
+    return data.side
+end
+
+-- Функция для применения пресета "Test"
+function apply_test_preset()
+    -- Настройки для пресета "Test"
+    local test_preset = {
+        -- Standing state
+        [2] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = 0,
+            yaw_right = 0,
+            yaw = "Center",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Jitter",
+            body_yaw_degree = 60,
+            defensive = false,
+        },
+        -- Moving state
+        [3] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = 0,
+            yaw_right = 0,
+            yaw = "Slow",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Smart",
+            body_yaw_degree = 60,
+            defensive = false,
+        },
+        -- Crouching state
+        [7] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = 0,
+            yaw_right = 0,
+            yaw = "Center",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Jitter",
+            body_yaw_degree = 60,
+            defensive = false,
+        },
+    }
+    
+    -- Применяем настройки к элементам builder
+    for state_index, settings in pairs(test_preset) do
+        if menu.builder[state_index] then
+            for setting_name, value in pairs(settings) do
+                if menu.builder[state_index][setting_name] then
+                    menu.builder[state_index][setting_name]:set(value)
+                end
+            end
+        end
+    end
+    
+    print("[preset] Applied Test preset")
+end
+
+-- Функция для применения пресета "Chester's Cider" (полная конфигурация из Chimera Alpha)
+function apply_chester_cider_preset()
+    -- Точная конфигурация Chester's Cider из Chimera Alpha JSON
+    local chester_cider_preset = {
+        -- Standing Angles (индекс 2) - Default Angles
+        [2] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = -7,
+            yaw_right = 11,
+            yaw = "Center",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Jitter",
+            body_yaw_degree = -46,
+            defensive = false,
+        },
+        -- Moving Angles (индекс 3)
+        [3] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = -6,
+            yaw_right = 11,
+            yaw = "Center",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Jitter",
+            body_yaw_degree = -52,
+            defensive = false,
+        },
+        -- Slow Walking Angles (индекс 4)
+        [4] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = -23,
+            yaw_right = 47,
+            yaw = "Center",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Jitter",
+            body_yaw_degree = -5,
+            defensive = false,
+        },
+        -- Jumping Angles (индекс 5)
+        [5] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = -3,
+            yaw_right = 16,
+            yaw = "Center",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Jitter",
+            body_yaw_degree = -47,
+            defensive = false,
+        },
+        -- Jump-crouching Angles (индекс 6) - In Air & Crouching
+        [6] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = -8,
+            yaw_right = 14,
+            yaw = "Center",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Jitter",
+            body_yaw_degree = -46,
+            defensive = false,
+        },
+        -- Crouching Angles (индекс 7)
+        [7] = {
+            enable = true,
+            pitch = "Down",
+            yaw_default = 0,
+            yaw_add = "Off",
+            yaw_left = -10,
+            yaw_right = 16,
+            yaw = "Center",
+            yaw_center = 0,
+            yaw_randomize = 0,
+            double_tick_update = false,
+            tick_update = 2,
+            tick_update_second = 2,
+            body_yaw = "Jitter",
+            body_yaw_degree = -35,
+            defensive = false,
+        }
+    }
+    
+    -- Применяем настройки к элементам builder
+    for state_index, settings in pairs(chester_cider_preset) do
+        if menu.builder[state_index] then
+            for setting_name, value in pairs(settings) do
+                if menu.builder[state_index][setting_name] then
+                    menu.builder[state_index][setting_name]:set(value)
+                end
+            end
+        end
+    end
+    
+    -- Дополнительные настройки из Chester's Cider
+    -- Настройки для AA опций
+    if menu.aa_options then
+        menu.aa_options.yaw_base:set(true) -- At Target
+        menu.aa_options.manual_base:set("None")
+        menu.aa_options.freestand:set(false)
+        menu.aa_options.defensive:set(true)
+        menu.aa_options.static_on_def:set(false)
+        menu.aa_options.secret_exploit:set(false)
+        menu.aa_options.safe_head:set(true) -- Safe head enabled
+    end
+    
+    -- Настройки для misc
+    if menu.misc then
+        menu.misc.dt_recharge:set(false)
+        menu.misc.fast_ladder:set(false)
+        menu.misc.avoid_backstab:set(true)
+        menu.misc.teammate_whitelist:set(false)
+        menu.misc.debug:set(false)
+        menu.misc.animfix:set({"Legs", "Jumping", "Dirty sprite"})
+        menu.misc.cvar_optimizer:set({})
+        menu.misc.filter_console:set(false)
+        menu.misc.viewmodel_enable:set(true)
+        menu.misc.viewmodel.x:set(5)
+        menu.misc.viewmodel.y:set(-52)
+        menu.misc.viewmodel.z:set(0)
+        menu.misc.viewmodel.fov:set(120) -- Максимальное значение для viewmodel fov
+    end
+    
+    print("[preset] Applied Chester's Cider preset (full configuration from Chimera Alpha)")
+end
+
+function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
+    local tickrate = globals.tickcount() - entity.get_prop(lp, "m_flSimulationTime") * 64
+    local doubletap_ref = ref.dt:get() and ref.dt:get_hotkey()
+    local charge_check = entity.get_prop(lp, "m_nTickBase") - globals.tickcount()
+    if menu.enable:get() then
+        local overlap = adata.get_overlap(true)
+        local fl = entity.get_prop(lp, "m_nTickBase") - globals.tickcount()
+        local is_freestanding = is_freestand(lp) and menu.aa_options.freestand_cond:get(lua.conds_no_g[state]) and menu.aa_options.freestand:get() and menu.aa_options.manual_base:get() == "None"
+        ram.tickbase = fl < 0
+        ram.spin = ram.spin + 20
+        if ram.spin % 360 == 0 then
+            ram.spin = 0
+        end
+        if menu.misc.fast_ladder:get() then
+            fast_ladder(cmd, lp)
+        end
+        if menu.aa_options.left:get() or menu.aa_options.right:get() or menu.aa_options.backward:get() or menu.aa_options.forward:get() then
+            ram.manual_active = 1
+        end
+        if ram.manual_active ~= 0 then
+            manualing()
+            ram.manual_active = ram.manual_active + 1
+        end
+        if ram.manual_active == 3 then
+            ram.manual_active = 0
+        end
+
+        cmd.force_defensive = true
+
+        if is_defensive_active(lp) and menu.aa_options.defensive:get() and tab.defensive:get() then
+            ram.defensive_work = true
+        else
+            ram.defensive_work = false
+        end
+        if globals.chokedcommands() == 0 then
+            ram.aa_tickrate = ram.aa_tickrate + 1
+            if tab.yaw:get() == "Slow" and not ram.defensive_work then
+                if tab.double_tick_update:get() then
+                    if ram.jitter then 
+                        if ram.anti_aim.jit_tick_right ~= 0 then
+                            ram.anti_aim.jit_tick_right = 0
+                        end
+                        ram.anti_aim.jit_tick_left = ram.anti_aim.jit_tick_left + 1
+                        if ram.anti_aim.jit_tick_left >= (tab.tick_update:get() + 1) then
+                            ram.jitter = not ram.jitter
+                        end
+                    else
+                        if ram.anti_aim.jit_tick_left ~= 0 then
+                            ram.anti_aim.jit_tick_left = 0
+                        end
+                        ram.anti_aim.jit_tick_right = ram.anti_aim.jit_tick_right + 1
+                        if ram.anti_aim.jit_tick_right >= (tab.tick_update_second:get() + 1) then
+                            ram.jitter = not ram.jitter
+                        end
+                    end
+                else
+                    if ram.anti_aim.jit_tick_left ~= 0 then
+                        ram.anti_aim.jit_tick_left = 0
+                        ram.anti_aim.jit_tick_right = 0
+                    end
+                    if ram.aa_tickrate % (tab.tick_update:get() + 1) == 0 then
+                        ram.jitter = not ram.jitter
+                    end
+                end
+            else
+                ram.jitter = not ram.jitter
+            end
+        end
+        if ram.jitter ~= ram.anti_aim.jitter_update then
+            ram.anti_aim.random_add = client.random_int(tab.yaw_randomize:get() * -0.5, tab.yaw_randomize:get() * 0.5)
+            ram.anti_aim.jitter_update = ram.jitter
+        end
+        if not ram.defensive_work then
+            if menu.aa_options.manual_base:get() == "None" then
+                ram.anti_aim.manual = 0
+                ram.anti_aim.at_target = menu.aa_options.yaw_base:get()
+            else
+                ram.anti_aim.at_target = false
+                if menu.aa_options.manual_base:get() == "Backward" then
+                    ram.anti_aim.manual = 0
+                elseif menu.aa_options.manual_base:get() == "Left" then
+                    ram.anti_aim.manual = -90
+                elseif menu.aa_options.manual_base:get() == "Right" then
+                    ram.anti_aim.manual = 90
+                elseif menu.aa_options.manual_base:get() == "Forward" then
+                    ram.anti_aim.manual = 180
+                end
+            end
+            if tab.pitch:get() == "Off" then
+                ram.anti_aim.pitch = 0
+            elseif tab.pitch:get() == "Down" then
+                ram.anti_aim.pitch = 89
+            elseif tab.pitch:get() == "Up" then
+                ram.anti_aim.pitch = -89
+            end
+            if (menu.aa_options.manual_base:get() ~= "None" or is_freestanding) and menu.aa_options.static_on_manual:get() then
+                ram.anti_aim.cheat_yaw = "Off"
+                ram.anti_aim.add = 0
+                ram.anti_aim.yaw = 0
+                ram.anti_aim.jitter = 0
+                if menu.aa_options.manual_base:get() == "Backward" then
+                    ram.anti_aim.cheat_body = "Static"
+                    ram.anti_aim.fake = 0
+                else
+                    ram.anti_aim.cheat_body = "Static"
+                    ram.anti_aim.fake = -180
+                end
+            elseif tab.yaw:get() == "Center" and tab.yaw_add:get() == "Off" and tab.body_yaw:get() ~= "Smart" then
+                ram.anti_aim.cheat_yaw = "Center"
+                ram.anti_aim.add = 0
+                ram.anti_aim.yaw = tab.yaw_default:get()
+                ram.anti_aim.jitter = tab.yaw_center:get() + ram.anti_aim.random_add
+                if tab.body_yaw:get() == "Jitter" then
+                    ram.anti_aim.cheat_body = "Jitter"
+                    ram.anti_aim.fake = tab.body_yaw_degree:get()
+                elseif tab.body_yaw:get() == "Opposite" then
+                    ram.anti_aim.cheat_body = "Opposite"
+                    ram.anti_aim.fake = 0
+                else
+                    ram.anti_aim.cheat_body = "Static"
+                    ram.anti_aim.fake = 0
+                end
+            elseif tab.yaw:get() ~= "Off" then
+                ram.anti_aim.cheat_yaw = "Off"
+                if tab.yaw_add:get() ~= "Off" then
+                    ram.anti_aim.add = (not ram.jitter) and tab.yaw_left:get() or tab.yaw_right:get()
+                else
+                    ram.anti_aim.add = 0
+                end
+                if tab.yaw:get() == "Advanced skitter" then
+                    ram.anti_aim.yaw = tab.yaw_default:get() + client.random_int(math.min(tab.yaw_center:get() - (tab.yaw_center:get() * 2)), tab.yaw_center:get()) + ram.anti_aim.random_add
+                else
+                    ram.anti_aim.yaw = tab.yaw_default:get() + (ram.jitter and tab.yaw_center:get() / 2 or tab.yaw_center:get() / -2) + ram.anti_aim.random_add
+                end
+                ram.anti_aim.jitter = 0
+                if tab.body_yaw:get() == "Jitter" then
+                    ram.anti_aim.cheat_body = "Static"
+                    ram.anti_aim.fake = ram.jitter and tab.body_yaw_degree:get() or tab.body_yaw_degree:get() * -1
+                elseif tab.body_yaw:get() == "Smart" then
+                    max = overlap * (fl < 2 and 30 or 60)
+                    modifier = normalize_yaw(ram.anti_aim.add + ram.anti_aim.yaw)
+                    desync = modifier * gratio - (max * (ram.jitter and 1 or -1))
+                    ram.anti_aim.cheat_body = "Static"
+                    if ram.jitter then 
+                        desync = math.abs(desync)
+                    else
+                        desync = math.abs(desync) * -1
+                    end
+                    ram.anti_aim.fake = math.floor(math.clamp(desync, -180, 180))
+                elseif tab.body_yaw:get() == "Opposite" then
+                    ram.anti_aim.cheat_body = "Opposite"
+                    ram.anti_aim.fake = 0
+                else
+                    ram.anti_aim.cheat_body = "Static"
+                    ram.anti_aim.fake = 0
+                end
+            else
+                ram.anti_aim.cheat_yaw = "Off"
+                ram.anti_aim.add = 0
+                ram.anti_aim.yaw = tab.yaw_default:get()
+                ram.anti_aim.jitter = 0
+                ram.anti_aim.cheat_body = "Static"
+                ram.anti_aim.fake = 0
+            end
+            ram.pitch_min = -89
+            ram.anti_aim.fsbodyyaw = false
+            ram.anti_aim.side = nil
+            if ram.defensive.pitch_update == true then
+                ram.defensive.pitch_phase = ram.defensive.pitch_phase + 1
+                ram.defensive.pitch_update = false
+            end
+            if menu.aa_options.static_on_def:get() and menu.aa_options.defensive:get() and tab.defensive:get() and menu.aa_options.manual_base:get() == "None" then
+                ram.anti_aim.cheat_yaw = "Off"
+                ram.anti_aim.add = 0
+                ram.anti_aim.jitter = 0
+                ram.anti_aim.cheat_body = "Static"
+                ram.anti_aim.manual = 0
+                ram.anti_aim.at_target = true
+                ram.anti_aim.fsbodyyaw = false
+            end
+        else
+            if menu.aa_options.manual_base:get() == "None" and menu.aa_options.static_on_def:get() then
+                ram.anti_aim.cheat_yaw = "Off"
+                ram.anti_aim.add = 0
+                ram.anti_aim.jitter = 0
+                ram.anti_aim.cheat_body = "Static"
+                ram.anti_aim.manual = 0
+                ram.anti_aim.at_target = true
+                ram.anti_aim.fsbodyyaw = false
+            end
+                if menu.aa_options.secret_exploit:get() then
+                    cmd.force_defensive = cmd.command_number % 7 == 0
+                elseif not menu.aa_options.secret_exploit:get() then
+                    cmd.force_defensive = cmd.command_number % 16 == 0
+                end
+            if tab.d_pitch:get() ~= "Lerp" then
+                ram.pitch_min = -89
+            end
+            if globals.chokedcommands() == 0 then
+                if tab.d_pitch:get() == "Lerp" then
+                    ram.pitch_min = math.lerp(ram.pitch_min, ram.pitch_max, globals.curtime() * 6 % 2 - 1)
+                    ram.anti_aim.pitch = math.clamp(ram.pitch_min, -89, 89)
+                elseif tab.d_pitch:get() == "Static" then
+                    ram.anti_aim.pitch = tab.d_pitch_degree:get()
+                elseif tab.d_pitch:get() == "Jitter" then
+                    ram.anti_aim.pitch = ram.aa_tickrate % 2 == 0 and -80 or -60
+                elseif tab.d_pitch:get() == "Random" then
+                    ram.defensive.pitch_update = true
+                    local tickcount = (globals.tickcount() / 2)
+                    local random_min = tab.d_pitch_random_min:get()
+                    local random_max = tab.d_pitch_random_max:get()
+                    local s1 = tab.d_pitch_random_delay_min:get()
+                    local s2 = tab.d_pitch_random_delay_max:get()
+                    local delay
+                    
+                    if tab.d_pitch_random_delay_enable:get() == true then
+                        delay = math.random(s1, s2)
+                    else
+                        delay = tab.d_pitch_random_delay:get()
+                    end
+                    
+                    if delay and type(delay) == "number" and delay >= 0 then
+                        if math.ceil(tickcount / (delay + 1)) ~= math.ceil((tickcount - 1) / (delay + 1)) then
+                            ram.anti_aim.pitch = client.random_int(random_min, random_max)
+                        end
+                    end
+                elseif tab.d_pitch:get() == "Sway" then
+                    ram.defensive.pitch_update = true
+                    local sway_time = 12
+                    local tickcount = (globals.tickcount() / 2)
+                    local range = tab.d_pitch_range:get()
+                    local speed = tab.d_pitch_speed:get()
+                    local s1 = tab.d_pitch_skip_min:get()
+                    local s2 = tab.d_pitch_skip_max:get()
+                    local delay
+                    
+                    if tab.d_pitch_random_skip:get() then
+                        delay = math.random(s1, s2)
+                    else
+                        delay = tab.d_pitch_skip:get()
+                    end
+                    
+                    ram.anti_aim.pitch = (math.abs((math.ceil(tickcount / (delay + 1)) * speed % ((range + 1))) - range / 2) - range / 4) * 2 + tab.d_pitch_degree:get()
+
+                    if ram.anti_aim.pitch >= 89 then
+                        ram.anti_aim.pitch = 89
+                    elseif ram.anti_aim.pitch <= -89 then
+                        ram.anti_aim.pitch = -89
+                    end
+                end
+                if tab.d_yaw:get() == "Forward" then
+                    ram.anti_aim.yaw = 180 + tab.d_offset:get()
+                    ram.anti_aim.fake = 180
+                elseif tab.d_yaw:get() == "Freestand" then
+                    local freestand_dir = get_freestand_direction(entity.get_local_player())
+                    if freestand_dir == -1 then
+                        ram.anti_aim.yaw = -tab.d_offset:get()
+                    else
+                        ram.anti_aim.yaw = tab.d_offset:get()
+                    end
+                    ram.anti_aim.fake = 180
+                elseif tab.d_yaw:get() == "Spin" then
+                    ram.anti_aim.yaw = globals.tickcount() % 18 * 20 + tab.d_offset:get()
+                    ram.anti_aim.fake = 180
+                elseif tab.d_yaw:get() == "180 z" then
+                    ram.anti_aim.fake = 180
+                    if globals.tickcount() % 18 <= 9 then
+                        ram.anti_aim.yaw = globals.tickcount() % 9 * 20 + tab.d_offset:get() - 90
+                    else
+                        ram.anti_aim.yaw = math.abs(9 - globals.tickcount() % 9) * 20 + tab.d_offset:get() - 90
+                    end
+                elseif tab.d_yaw:get() == "Slow spin" then
+                    ram.anti_aim.yaw = globals.tickcount() % 60 * 6 + tab.d_offset:get()
+                    ram.anti_aim.fake = 180
+                elseif tab.d_yaw:get() == "Sideways" then
+                    if ram.aa_tickrate % (tab.d_tick_update:get() + 1) == 0 then
+                        ram.def_jitter = not ram.def_jitter
+                    end
+                    ram.anti_aim.yaw = (ram.def_jitter and 90 or -90) + tab.d_offset:get()
+                    ram.anti_aim.fake = ram.def_jitter and 180 or -180
+                elseif tab.d_yaw:get() == "Random" then    
+                    ram.anti_aim.yaw = math.random(-180, 180)
+                    ram.anti_aim.fake = 180
+                elseif tab.d_yaw:get() == "Sin" then
+                    ram.anti_aim.yaw = math.sin(globals.servertickcount() / 10 * 4) * 90 + tab.d_offset:get()
+                    ram.anti_aim.fake = 180
+                elseif tab.d_yaw:get() == "Flick" then
+                    if side ~= "none" then
+                        ram.defensive.local_side = side
+                    end
+                    if ram.defensive.local_side  == "right" then
+                        ram.anti_aim.fake = 180
+                        ram.anti_aim.yaw = 90 + tab.d_offset:get()
+                    elseif ram.defensive.local_side  == "left" then
+                        ram.anti_aim.fake = -180
+                        ram.anti_aim.yaw = -90 + tab.d_offset:get()
+                    else
+                        ram.anti_aim.yaw = (cmd.sidemove > 0 and 90 or -90) + tab.d_offset:get()
+                        ram.anti_aim.fake = cmd.sidemove > 0 and 180 or -180
+                    end
+                    if not tab.d_yaw:get() == "Flick" then 
+                        cmd.force_defensive = cmd.command_number % 16 == 0
+                        return 
+                    else
+                        cmd.force_defensive = cmd.command_number % 7 == 0
+                    end
+
+                end
+                if (menu.aa_options.manual_base:get() ~= "None" or is_freestanding) and menu.aa_options.static_on_manual:get() then
+                    if menu.aa_options.defensive_on_manual:get() then
+                        ram.anti_aim.pitch = 0
+                        if menu.aa_options.manual_base:get() == "Left" then
+                            ram.anti_aim.yaw = 180
+                        elseif menu.aa_options.manual_base:get() == "Right" then
+                            ram.anti_aim.yaw = -180
+                        end
+                    end
+                end
+            end
+        end
+        if menu.aa_options.freestand_cond:get(lua.conds_no_g[state]) and menu.aa_options.freestand:get() and menu.aa_options.manual_base:get() == "None" then
+            ram.anti_aim.freestand = true
+        else
+            ram.anti_aim.freestand = false
+        end
+        if state == 7 then
+            ram.anti_aim.freestand = false
+            ram.anti_aim.yaw = ram.anti_aim.yaw * -1 + 180
+            ram.anti_aim.at_target = false
+        end
+        if safehead then
+            ram.anti_aim.pitch = 89
+            ram.anti_aim.cheat_yaw = "Off"
+            ram.anti_aim.add = 0
+            ram.anti_aim.yaw = 0
+            ram.anti_aim.jitter = 0
+            ram.anti_aim.cheat_body = "Static"
+            ram.anti_aim.fake = 0
+            ram.anti_aim.manual = 0
+            ram.anti_aim.at_target = true
+        end
+        if avoid_backstabing then
+            ram.anti_aim.pitch = 89
+            ram.anti_aim.cheat_yaw = "Off"
+            ram.anti_aim.add = 0
+            ram.anti_aim.yaw = 180
+            ram.anti_aim.jitter = 0
+            ram.anti_aim.cheat_body = "Static"
+            ram.anti_aim.fake = 180
+            ram.anti_aim.manual = 0
+            ram.anti_aim.at_target = true
+        end
+        if ref.hs:get_hotkey() and not (ref.fakeduck:get() or ref.dt:get_hotkey()) then
+            ram.anti_aim.fl_limit = 1
+        else
+            ram.anti_aim.fl_limit = menu.fake_lag_limit:get()
+        end
+        if menu.aa_options.funny_warmup:get() then
+            if (entity.get_prop(entity.get_game_rules(), "m_bWarmupPeriod") == 1) then
+                ram.anti_aim.cheat_yaw = "Off"
+                ram.anti_aim.add = 0
+                ram.anti_aim.yaw = globals.tickcount() % 18 * 20 - 180
+                ram.anti_aim.jitter = 0
+                ram.anti_aim.cheat_body = "Static"
+                ram.anti_aim.fake = 0
+                ram.anti_aim.manual = 0
+                ram.anti_aim.at_target = false
+                ram.anti_aim.pitch = 0
+            end
+        end
+    else
+        ref.enabled:set(true)
+        ref.yawbase:set("At targets")
+        ref.yaw[1]:set("180")
+        ref.yaw[2]:set(180)
+        ref.pitch[1]:set("Default")
+        ref.bodyyaw[1]:set("Static")
+        ref.bodyyaw[2]:set(0)
+        ref.pitch[1]:set("Off")
+        ref.yawjitter[1]:set("Off")
+        ref.fsbodyyaw:set(false)
+        ref.edgeyaw:set(false)
+        ref.freestand[1]:set(false)
+    end
+    if(globals.chokedcommands() == 0 and lp ~= nil and entity.is_alive(lp)) then
+        tickbase = entity.get_prop(lp, "m_nTickBase") - globals.tickcount()
+    end
+end
+
+local was_disabled = true
+local shot_tick = 0
+local ticking = 0
+
+function aa_setting(cmd)
+    if not menu.enable:get() then return end
+    local yaw = math.floor(normalize_yaw(ram.anti_aim.add + ram.anti_aim.yaw + ram.anti_aim.manual))
+    if ref.fl_enable:get() ~= true then
+        ref.fl_enable:set(true)
+        ref.fl_enable:set_hotkey("Always on")
+    end
+    if ref.fl_amount:get() ~= menu.fake_lag_amount:get() then
+        ref.fl_amount:set(menu.fake_lag_amount:get())
+    end
+    if ref.fl_var:get() ~= menu.fake_lag_variance:get() then
+        ref.fl_var:set(menu.fake_lag_variance:get())
+    end
+    if ref.fsbodyyaw:get() ~= ram.anti_aim.fsbodyyaw then
+        ref.fsbodyyaw:set(ram.anti_aim.fsbodyyaw)
+    end
+    if ref.yaw[1]:get() ~= "180" then
+        ref.yaw[1]:set(180)
+    end
+    if ref.yaw[2]:get() ~= math.floor(yaw) then
+        ref.yaw[2]:set(math.floor(yaw))
+    end
+    if ref.pitch[1]:get() ~= "Custom" then
+        ref.pitch[1]:set("Custom")
+    end
+    if ref.pitch[2]:get() ~= math.floor(ram.anti_aim.pitch) then
+        ref.pitch[2]:set(math.floor(ram.anti_aim.pitch))
+    end
+    if ref.bodyyaw[1]:get() ~= ram.anti_aim.cheat_body then
+        ref.bodyyaw[1]:set(ram.anti_aim.cheat_body)
+    end
+    if ref.fl_limit:get() ~= ram.anti_aim.fl_limit then
+        ref.fl_limit:set(ram.anti_aim.fl_limit)
+    end
+    local fake = math.clamp(ram.anti_aim.fake, -180, 180)
+    if ref.bodyyaw[2]:get() ~= fake then
+        ref.bodyyaw[2]:set(fake)
+    end
+    if ref.yawjitter[1]:get() ~= ram.anti_aim.cheat_yaw then
+        ref.yawjitter[1]:set(ram.anti_aim.cheat_yaw)
+    end
+    if ref.yawjitter[2]:get() ~= math.floor(ram.anti_aim.jitter) then
+        ref.yawjitter[2]:set(normalize_yaw(math.floor(ram.anti_aim.jitter)))
+    end
+    
+    if (ref.yawbase:get() == "At targets") ~= ram.anti_aim.at_target then
+        if ram.anti_aim.at_target then
+            ref.yawbase:set("At targets")
+        else
+            ref.yawbase:set("Local view")
+        end
+    end
+    if ram.anti_aim.freestand_active ~= ram.anti_aim.freestand then
+        if ram.anti_aim.freestand then
+            ref.freestand[1]:set(true)
+            ref.freestand[1]:set_hotkey("Always On")
+        else
+            ref.freestand[1]:set(false)
+            ref.freestand[1]:set_hotkey("On hotkey")
+        end
+        ram.anti_aim.freestand_active = ram.anti_aim.freestand
+    end
+    local doubletap_ref = ref.dt:get() and ref.dt:get_hotkey() and not ref.fake_duck:get()
+    if doubletap_ref then
+        if globals.chokedcommands() == 0 then
+            if ref.quickpeek:get_hotkey() and ref.quickpeek:get() and ram.tickbase then 
+                ind.dt_state = "IDEAL PICK"
+            elseif ram.tickbase and not ref.fakeduck:get() then
+                ind.dt_state = "READY"
+            elseif globals.tickcount() % 16 > 4 or ref.fakeduck:get() then
+                ind.dt_state = "WAIT"
+            end
+        end
+    else
+        ind.dt_state = "WAIT"
+    end
+    if ram.tickbase or not ref.hs:get_hotkey() then
+        ind.hide_state = "READY"
+    else
+        ind.hide_state = "CHARGING"
+    end
+    
+
+    
+end
+
+function charging(lp)
+    if menu.misc.dt_recharge:get() then
+        if(globals.chokedcommands() == 0 and lp ~= nil and entity.is_alive(lp)) then
+            tickbase = entity.get_prop(lp, "m_nTickBase") - globals.tickcount()
+        end
+        local doubletap_ref = ref.dt:get() and ref.dt:get_hotkey() and not ref.fake_duck:get()
+        if not doubletap_ref then
+            was_disabled = true
+        end
+        if tickbase == nil then return end
+        if (doubletap_ref or ref.hs:get_hotkey()) and tickbase > 0 and was_disabled then
+            ref.aimbot:override(false)
+            was_disabled = false
+            ticking = 0
+        else
+            local lp_weapon = entity.get_player_weapon(lp)
+            if lp_weapon ~= nil then
+                local weapon_id = bit.band(entity.get_prop(entity.get_player_weapon(lp), "m_iItemDefinitionIndex"), 0xFFFF)
+                if weapon_id == 64 then
+                    ref.aimbot:override(true)
+                    if ticking <= 2 then
+                        ticking = ticking + 1
+                    end
+                    if ticking <= 1 then
+                        ref.aimbot:override(false)
+                    else
+                        ref.aimbot:override(true)
+                    end
+                else
+                    ref.aimbot:override(true)
+                end
+            end
+        end
+    end
+end
+
+local main_massive_logs = {}
+local for_rendering = {}
+
+function aim_hit(e)
+    if(menu.visuals.logs:get()) and main_massive_logs[e.id] ~= nil then
+        local sht_info = main_massive_logs[e.id]
+        local ar, ag, ab = menu.visuals.logs_color1:get()
+        local r, g, b = menu.visuals.logs_color2:get()
+        local hitgroup = sht_info.hitbox
+        local tname = entity.get_player_name(sht_info.target)
+        local dmg = sht_info.damage
+        local bt = sht_info.backtrack
+        local ht = math.floor(sht_info.hitchance)
+        local test_frst = "Hit \0"
+        local realdmg = sht_info.target_hp - entity.get_prop(sht_info.target, "m_iHealth")
+        client.color_log(ar, ag, ab, "Damage given to \0")
+        client.color_log(r, g, b, tname .. "\0")
+        client.color_log(ar, ag, ab, "'s \0")
+        client.color_log(r, g, b, hitgroup .. " \0")
+        client.color_log(ar, ag, ab, "~ \0")
+        client.color_log(r, g, b, realdmg .. " (" .. dmg .. ") \0")
+        client.color_log(ar, ag, ab, "[HT: \0")
+        client.color_log(r, g, b, ht .. "% \0")
+        client.color_log(ar, ag, ab, "~ | ~ BT:\0 ")
+        client.color_log(r, g, b, bt .. "\0")
+        client.color_log(ar, ag, ab, " ~ | ~ RHP:\0 ")
+        client.color_log(r, g, b, entity.get_prop(sht_info.target, "m_iHealth") .. "\0")
+        client.color_log(ar, ag, ab, "]")
+        if menu.visuals.screen_logs:get() then
+            table.insert(for_rendering, 1, {text = "[project john] damage given to " .. tname .. " for " .. realdmg .. " (" .. dmg .. ")", alpha = 0, add_y = 0, tick = globals.curtime() * 64, randomize = math.random(0, 100)})
+        end
+        main_massive_logs = {}
+    end
+end
+
+function aim_miss(e)
+    if(menu.visuals.logs:get()) and main_massive_logs[e.id] ~= nil then
+        local ar, ag, ab = menu.visuals.logs_color1:get()
+        local r, g, b = menu.visuals.logs_color3:get()
+        local sht_info = main_massive_logs[e.id]
+        local reason = e.reason
+        local tname = entity.get_player_name(sht_info.target)
+        local hitbox = sht_info.hitbox
+        local bt = sht_info.backtrack
+        local dmg = sht_info.damage
+        local ht = math.floor(sht_info.hitchance)
+        client.color_log(ar, ag, ab, "Missed in \0")
+        client.color_log(r, g, b, tname .. "'s \0")
+        client.color_log(r, g, b, hitbox .. "\0")
+        client.color_log(ar, ag, ab, " due to \0")
+        client.color_log(r, g, b, reason .. " \0")
+        client.color_log(ar, ag, ab, "[HT: \0")
+        client.color_log(r, g, b, ht .. "% \0")
+        client.color_log(ar, ag, ab, "~ | ~ DMG: \0")
+        client.color_log(r, g, b, dmg .. " \0")
+        client.color_log(ar, ag, ab, "~ | ~ BT: \0")
+        client.color_log(r, g, b, bt .. "\0")
+        client.color_log(ar, ag, ab, "]")
+        if menu.visuals.screen_logs:get() then
+            table.insert(for_rendering, 1, {text = "[project john] missed in " .. tname .. "'s " .. hitbox ..  " for " .. dmg, alpha = 0, add_y = 0, tick = globals.curtime() * 64, randomize = math.random(0, 100)})
+        end
+        main_massive_logs = {}
+    end
+end
+
+function reset_tick()
+    ram.aa_tickrate = 1
+    ram.tick_def_off = 0
+    reset_def()
+end
+
+function aim_fire(e)
+    local tickrate = client.get_cvar("cl_cmdrate") or 64
+    local ticks = globals.tickcount() - e.tick
+    main_massive_logs[e.id] = {
+        hitbox = hitgroup_names[e.hitgroup + 1],
+        damage = e.damage,
+        backtrack = ticks,
+        target = e.target,
+        hitchance = e.hit_chance,
+        target_hp = entity.get_prop(e.target, "m_iHealth"),
+    }
+    reset_tick()
+end
+
+function set_on()
+    local players = entity.get_players(false)
     local lp = entity.get_local_player()
-    if not lp or defensive_check.last_cmd ~= cmd.command_number then
+    if #players > 1 then
+        for i, player in ipairs(players) do
+            team_num_p = entity.get_prop(player, "m_iTeamNum")
+            team_num_lp = entity.get_prop(lp, "m_iTeamNum")
+            if team_num_lp == team_num_p and menu.misc.teammate_whitelist:get() then
+                plist.set(player, "Allow shared ESP updates", true)
+            else
+                plist.set(player, "Allow shared ESP updates", false)
+            end
+        end
+    end
+end
+
+local render = {
+    text = function(x, w, r, g, b, a, flags, max_width, texting)
+        renderer.text(x, w, r, g, b, a, flags, max_width, texting)
+    end,
+    measure_text = function(flags, texting)
+        if(renderer.measure_text("-", "oh shit") == renderer.measure_text(flags, "oh shit")) then
+            texting = string.upper(texting)
+        end
+        return renderer.measure_text(flags, texting)
+    end,
+    rounded_rectangle = function(x, y, w, h, r, g, b, a, radius)
+        y = y + radius
+        local data_circle = {
+            {x + radius, y, 180},
+            {x + w - radius, y, 90},
+            {x + radius, y + h - radius * 2, 270},
+            {x + w - radius, y + h - radius * 2, 0},
+        }
+    
+        local data = {
+            {x + radius, y, w - radius * 2, h - radius * 2},
+            {x + radius, y - radius, w - radius * 2, radius},
+            {x + radius, y + h - radius * 2, w - radius * 2, radius},
+            {x, y, radius, h - radius * 2},
+            {x + w - radius, y, radius, h - radius * 2},
+        }
+    
+        for _, data in next, data_circle do
+            renderer.circle(data[1], data[2], r, g, b, a, radius, data[3], 0.25)
+        end
+    
+        for _, data in next, data do
+            renderer.rectangle(data[1], data[2], data[3], data[4], r, g, b, a)
+        end
+    end,
+    rounded_outline = function(x, y, w, h, r, g, b, a, thickness, radius)
+        renderer.rectangle(x + radius, y, w - radius * 2, thickness, r, g, b, a)
+        renderer.rectangle(x + w - thickness, y + radius, thickness, h - radius * 2, r, g, b, a)
+        renderer.rectangle(x, y + radius, thickness, h - radius * 2, r, g, b, a)
+        renderer.rectangle(x + radius, y + h - thickness, w - radius * 2, thickness, r, g, b, a)
+        renderer.circle_outline(x + radius, y + radius, r, g, b, a, radius, 180, 0.25, thickness)
+        renderer.circle_outline(x - radius + w, y + radius, r, g, b, a, radius, 270, 0.25, thickness)
+        renderer.circle_outline(x + radius, y - radius + h, r, g, b, a, radius, 90, 0.25, thickness)
+        renderer.circle_outline(x - radius + w, y - radius + h, r, g, b, a, radius, 0, 0.25, thickness)
+    end,
+}
+
+function render_logs()
+    if menu.visuals.screen_logs:get() then
+        local add_y = 0
+        local const_x, const_y = client.screen_size()
+        local x, y = const_x / 2, const_y / 2 + const_y / 4
+        local r, g, b = menu.visuals.screen_log_color:get()
+        
+        -- Используем цвет из настроек скрипта
+        local menu_r, menu_g, menu_b = r, g, b
+        
+        if #for_rendering >= 1 then
+            for i, log in ipairs(for_rendering) do
+                log.alpha = math.lerp(log.alpha, ((globals.curtime() * 64 - log.tick < 64 * 6) or i > 5) and 255 or 0, 0.02)
+                local y2 = 0
+                local y3 = 0
+                local y = const_y / 2 + 230
+                y2 = y + add_y
+                y3 = const_y - y2
+                y = const_y - y3 * log.alpha / 255
+                
+                local sizex, sizey = render.measure_text("c", log.text)
+                local log_alpha = log.alpha / 255
+                
+                -- СТАРЫЕ ЛОГИ (ЗАКОММЕНТИРОВАНЫ)
+                --[[
+                -- Основной фон - темно-серый с закругленными углами
+                local bg_alpha = math.floor(140 * log_alpha)
+                render.rounded_rectangle(x - sizex / 2 - 12, y + add_y - 8, sizex + 24, sizey + 16, 25, 25, 25, bg_alpha, 15)
+                
+                -- Тонкая граница (убрана)
+                local border_alpha = math.floor(200 * log_alpha)
+                render.rounded_outline(x - sizex / 2 - 12, y + add_y - 8, sizex + 24, sizey + 16, 60, 60, 60, border_alpha, 1, 15)
+                
+                -- Декоративные круги по бокам (закомментированы)
+                local circle_alpha = math.floor(180 * log_alpha)
+                local circle_y = y + add_y + sizey / 2
+                
+                -- Левый круг
+                renderer.circle(x - sizex / 2 - 6, circle_y, 80, 80, 80, circle_alpha, 3, 0, 1)
+                renderer.circle_outline(x - sizex / 2 - 6, circle_y, 100, 100, 100, circle_alpha, 4, 0, 1, 1)
+                
+                -- Правый круг
+                renderer.circle(x + sizex / 2 + 6, circle_y, 80, 80, 80, circle_alpha, 3, 0, 1)
+                renderer.circle_outline(x + sizex / 2 + 6, circle_y, 100, 100, 100, circle_alpha, 4, 0, 1, 1)
+                
+                -- Тень для текста
+                local shadow_alpha = math.floor(40 * log_alpha)
+                render.text(x + 1, y + add_y + 1, 0, 0, 0, shadow_alpha, "c", 0, log.text)
+                
+                -- Основной текст (точно по центру)
+                local text_alpha = math.floor(255 * log_alpha)
+                render.text(x, y + add_y + 5, 255, 255, 255, text_alpha, "c", 0, log.text)
+                --]]
+                
+                -- ИСПРАВЛЕННЫЕ ЛОГИ
+                local bg_alpha = math.floor(160 * log_alpha)
+                local border_alpha = math.floor(220 * log_alpha)
+                local accent_alpha = math.floor(255 * log_alpha)
+                
+                -- Основной фон
+                renderer.rectangle(x - sizex / 2 - 15, y + add_y - 10, sizex + 30, sizey + 20, 18, 18, 22, bg_alpha)
+                
+                -- Акцентная полоса сверху (цвет из настроек)
+                renderer.rectangle(x - sizex / 2 - 15, y + add_y - 10, sizex + 30, 2, menu_r, menu_g, menu_b, accent_alpha)
+                
+                -- Тонкая граница
+                renderer.rectangle(x - sizex / 2 - 15, y + add_y - 10, 1, sizey + 20, 45, 45, 50, border_alpha) -- левая
+                renderer.rectangle(x + sizex / 2 + 14, y + add_y - 10, 1, sizey + 20, 45, 45, 50, border_alpha) -- правая
+                renderer.rectangle(x - sizex / 2 - 15, y + add_y - 10, sizex + 30, 1, 45, 45, 50, border_alpha) -- верхняя
+                renderer.rectangle(x - sizex / 2 - 15, y + add_y + sizey + 9, sizex + 30, 1, 45, 45, 50, border_alpha) -- нижняя
+                
+                -- Декоративные элементы (цвет из настроек)
+                local pulse = math.sin(globals.curtime() * 2 + i * 0.5) * 0.5 + 0.5
+                local glow_alpha = math.floor(80 * pulse * log_alpha)
+                
+                -- Левый декоративный элемент
+                renderer.circle(x - sizex / 2 - 8, y + add_y + sizey / 2, menu_r, menu_g, menu_b, glow_alpha, 2, 0, 1)
+                renderer.circle_outline(x - sizex / 2 - 8, y + add_y + sizey / 2, menu_r, menu_g, menu_b, glow_alpha, 3, 0, 1, 1)
+                
+                -- Правый декоративный элемент
+                renderer.circle(x + sizex / 2 + 8, y + add_y + sizey / 2, menu_r, menu_g, menu_b, glow_alpha, 2, 0, 1)
+                renderer.circle_outline(x + sizex / 2 + 8, y + add_y + sizey / 2, menu_r, menu_g, menu_b, glow_alpha, 3, 0, 1, 1)
+                
+                -- Тень для текста
+                local shadow_alpha = math.floor(50 * log_alpha)
+                render.text(x + 1, y + add_y + 1, 0, 0, 0, shadow_alpha, "c", 0, log.text)
+                
+                -- Основной текст (простой, без разбивки на слова)
+                local text_alpha = math.floor(255 * log_alpha)
+                render.text(x, y + add_y, 255, 255, 255, text_alpha, "c", 0, log.text)
+                
+                -- Прогресс-бар внизу (цвет из настроек)
+                local progress = (globals.curtime() * 64 - log.tick) / (64 * 6)
+                local progress_width = (sizex + 30) * math.max(0, 1 - progress)
+                if progress_width > 0 then
+                    renderer.rectangle(x - sizex / 2 - 15, y + add_y + sizey + 8, progress_width, 1, menu_r, menu_g, menu_b, accent_alpha)
+                end
+                
+                add_y = add_y + (24) * log_alpha
+                
+                if((globals.curtime() * 64 - log.tick > 64 * 8 and y + add_y > const_y - 25) or y + add_y > const_y + 25) then
+                    table.remove(for_rendering, i)
+                end
+            end
+        end
+    end
+end
+function watermark()
+    local x, y = client.screen_size()
+    render.text(x / 2, y - 35, 255, 255, 250, 255, "c", 0, "P R O J E C T   J O N H")
+end
+
+local anim = {}
+
+local math_hundred_floor = function(valu)
+    return (math.floor(valu * 100) / 100)
+end
+
+anim.default = function(tog, val, towhat, speed, if_not_tog)
+    local wanted_frametime = 80
+    local current_frametime = 1 / globals.frametime()
+    local percent = wanted_frametime / current_frametime
+    if(tog) then
+        if(towhat == 255) then
+            if(val > 235) then
+                val = 255
+            else
+                if(val < towhat) then
+                    val = val + globals.frametime() * speed * 1.5 * 64
+                end
+                if(val > towhat) then
+                    val = val - globals.frametime() * speed * 1.5 * 64
+                end
+            end
+        else
+            if(math.floor(val / 10) == math.floor(towhat / 10)) then
+                val = towhat
+            else
+                if(val < towhat) then
+                    val = val + globals.frametime() * speed * 2 * 64
+                end
+                if(val > towhat) then
+                    val = val - globals.frametime() * speed * 2 * 64
+                end
+            end
+        end
+    else
+        if(math_hundred_floor(val) <= math_hundred_floor(if_not_tog)) then
+            val = if_not_tog
+        end
+        if(math_hundred_floor(val) > if_not_tog) then
+            val = val - speed * percent
+        end
+    end
+    return math.floor(val)
+end
+
+function indicators(lp)
+    local x, y = client.screen_size()
+    if not (lp and entity.is_alive(lp)) and not ui.is_menu_open() then return end
+    local r, g, b = menu.visuals.ind_color:get()
+
+    local doubletap_ref = ref.dt:get() and ref.dt:get_hotkey()
+
+    if ind.pulse.toggle then
+        if math.ceil(ind.pulse.alpha) < 255 then
+            ind.pulse.alpha = ind.pulse.alpha + globals.frametime() * 255
+        else
+            ind.pulse.toggle = false
+        end
+    else
+        if math.floor(ind.pulse.alpha) > 0 then
+            ind.pulse.alpha = ind.pulse.alpha - globals.frametime() * 255
+        else
+            ind.pulse.toggle = true
+        end
+    end
+
+    if(lp ~= nil and entity.is_alive(lp)) then
+        if(entity.get_prop(lp, "m_bIsScoped") == 1) then
+            ind.zoomed = true
+        else
+            ind.zoomed = false
+        end
+    else
+        ind.zoomed = false
+    end
+    if not lp then
+        ind.scoped.state_name = "MENU"
+    end
+    local x_project_john_lua = render.measure_text("-", "PROJECT JOHN DEV")
+    local x_project_john = render.measure_text("-", "PROJECT JOHN")
+    local x_state = render.measure_text("-", ind.scoped.state_name)
+    if ind.dt_state ~= "" then
+        ind.add_state = " " .. ind.dt_state
+    else
+        ind.add_state = ""
+    end
+    local x_dt = render.measure_text("-", "RAPID" .. ind.add_state)
+    local x_rapid = render.measure_text("-", "RAPID ")
+    local hideshots = render.measure_text("-", "AAOS " .. ind.hide_state)
+    local x_hide = render.measure_text("-", "AAOS ")
+    local x_freestand = render.measure_text("-", "DIRECTION")
+
+    ind.scoped.name = math.ceil(math.lerp(ind.scoped.name, ind.zoomed and 0 or (x_project_john_lua + 10) * 100, 0.05))
+    ind.scoped.state = math.ceil(math.lerp(ind.scoped.state, ind.zoomed and 0 or (x_state + 10) * 100, 0.05))
+    ind.scoped.doubletap = math.ceil(math.lerp(ind.scoped.doubletap, ind.zoomed and 0 or (x_dt + 10) * 100, 0.05))
+    ind.scoped.freestand = math.ceil(math.lerp(ind.scoped.freestand, ind.zoomed and 0 or (x_freestand + 10) * 100, 0.05))
+    ind.scoped.hideshots = math.ceil(math.lerp(ind.scoped.hideshots, ind.zoomed and 0 or (hideshots + 10) * 100, 0.05))
+
+    y_s = y / 2 + menu.visuals.indicator_y:get() - 35
+
+    render.text(x / 2 - ind.scoped.name / 100 / 2 + 5, y_s + 35, 255, 255, 255, 225, "-", 0, "PROJECT JOHN")
+    render.text(x / 2 - ind.scoped.name / 100 / 2 + 5 + x_project_john, y_s + 35, r, g, b, math.clamp(ind.pulse.alpha * 225 / 255, 0, 225), "-", 0, " DEV")
+    render.text(x / 2 - ind.scoped.state / 100 / 2 + 5, y_s + 45, 255, 255, 255, 225, "-", 0, ind.scoped.state_name)
+
+    ind.dt_alpha = math.ceil(math.lerp(ind.dt_alpha, (doubletap_ref and 255 or 0) * 100, 0.1))
+    ind.hide_alpha = math.ceil(math.lerp(ind.hide_alpha, (ref.hs:get_hotkey() and not doubletap_ref and 255 or 0) * 100, 0.1))
+    ind.fr_alpha = math.ceil(math.lerp(ind.fr_alpha, (menu.aa_options.freestand:get() and 255 or 0) * 100, 0.1))
+
+    ind.ideal_pick = anim.default(ind.dt_state == "IDEAL PICK", ind.ideal_pick, 255, 15, 0)
+    ind.dt_charge_alpha = anim.default(ind.dt_state == "READY" or ind.dt_state == "ACTIVE", ind.dt_charge_alpha, 255, 15, 0)
+    ind.dt_wait_alpha = anim.default(ind.dt_state == "WAIT", ind.dt_wait_alpha, 255, 15, 0)
+
+    ind.hide_charging_alpha = anim.default(ind.hide_state == "CHARGING", ind.hide_charging_alpha, 255, 15, 0)
+    ind.hide_ready_alpha = anim.default(ind.hide_state ~= "CHARGING", ind.hide_ready_alpha, 255, 15, 0)
+
+    local add_y = 0
+    if math.ceil(ind.dt_alpha) > 0 then
+        render.text(x / 2 - ind.scoped.doubletap / 100 / 2 + 5 + x_rapid, y_s + 55, 240, 200, 50, ind.dt_alpha / 100 * 225 / 255, "-", 0, string.sub("IDEAL PICK", 1, math.floor(string.len("IDEAL PICK") * ind.ideal_pick / 255) + 0.5))
+        render.text(x / 2 - ind.scoped.doubletap / 100 / 2 + 5, y_s + 55, 255, 255, 255, ind.dt_alpha / 100 * 225 / 255, "-", 0, "RAPID ")
+        if ind.dt_state == "ACTIVE" then
+            rm, gm, bm = 211, 255, 50
+        else
+            rm, gm, bm = 150, 255, 150
+        end
+        render.text(x / 2 - ind.scoped.doubletap / 100 / 2 + 5 + x_rapid, y_s + 55, rm, gm, bm, ind.dt_alpha / 100 * ind.dt_charge_alpha / 255 * 225 / 255, "-", 0, string.sub(ind.dt_state == "ACTIVE" and "ACTIVE" or "READY", 1, math.floor(string.len(ind.dt_state == "ACTIVE" and "ACTIVE" or "READY") * ind.dt_charge_alpha / 255) + 0.5))
+        render.text(x / 2 - ind.scoped.doubletap / 100 / 2 + 5 + x_rapid, y_s + 55, 255, 15, 15, ind.dt_alpha / 100 * ind.dt_wait_alpha / 255 * 225 / 255, "-", 0, string.sub("WAIT", 1, math.floor(string.len("WAIT") * ind.dt_wait_alpha / 255) + 0.5))
+        add_y = add_y + 10 * math.ceil(ind.dt_alpha) / 100 / 255
+    end
+    if math.ceil(ind.hide_alpha) > 0 then
+        render.text(x / 2 - ind.scoped.hideshots / 100 / 2 + 5, y_s + 55, 255, 255, 255, ind.hide_alpha / 100 * 225 / 255, "-", 0, "AAOS ")
+        render.text(x / 2 - ind.scoped.hideshots / 100 / 2 + 5 + x_hide, y_s + 55, 255, 15, 15, ind.hide_alpha / 100 * 225 / 255 * ind.hide_charging_alpha / 255, "-", 0, string.sub("CHARGING", 1, math.floor(string.len("CHARGING") * ind.hide_charging_alpha / 255) + 0.5))
+        if ind.hide_state == "ACTIVE" then
+            rh, gh, bh = 211, 255, 50
+        else
+            rh, gh, bh = 150, 255, 150
+        end
+        render.text(x / 2 - ind.scoped.hideshots / 100 / 2 + 5 + x_hide, y_s + 55, rh, gh, bh, ind.hide_alpha / 100 * 225 / 255 * ind.hide_ready_alpha / 255, "-", 0, string.sub(ind.hide_state == "ACTIVE" and "ACTIVE" or "READY", 1, math.floor(string.len(ind.dt_state == "ACTIVE" and "ACTIVE" or "READY") * ind.hide_ready_alpha / 255) + 0.5))
+        add_y = add_y + 10 * math.ceil(ind.hide_alpha) / 100 / 255
+    end
+    if math.ceil(ind.fr_alpha) > 0 then
+        render.text(x / 2 - ind.scoped.freestand / 100 / 2 + 5, y_s + 55 + math.floor(add_y), 255, 255, 255, ind.fr_alpha / 100 * 225 / 255, "-", 0, string.sub("DIRECTION", 1, math.floor(string.len("DIRECTION") * ind.fr_alpha / 255 / 100) + 1))
+    end
+end
+
+function paint()
+    local lp = entity.get_local_player()
+    if not lp or not entity.is_alive(lp) then
+        for_rendering = {}
+    end
+    watermark()
+    if menu.visuals.screen_logs:get() then
+        render_logs()
+    end
+    if menu.visuals.indicators:get() then
+        indicators(lp)
+    else
+        ind = {
+            alpha = 0,
+            pulse = {
+                alpha = 0,
+                toggle = false,
+            },
+            dt_alpha = 0,
+            dt_state = "",
+            dt_charge_alpha = 0,
+            dt_wait_alpha = 0,
+            scoped = {
+                name = 0,
+                state = 0,
+                state_name = "MENU",
+                doubletap = 0,
+                freestand = 0,
+                hideshots = 0,
+            },
+            hide_state = "READY",
+            zoomed = false,
+            tickbase = 0,
+            fr_alpha = 0,
+            ideal_pick = 0,
+            hide_alpha = 0,
+            hide_charging_alpha = 0,
+            hide_ready_alpha = 0,
+        }
+    end
+    set_menu_builder()
+end
+
+aspect_ratio()
+menu.enable:set_callback(aspect_ratio)
+menu.visuals.aspect_ratio_type:set_callback(aspect_ratio)
+menu.visuals.normal_aspect_ratio:set_callback(aspect_ratio)
+menu.visuals.newcomer_aspect_ratio:set_callback(aspect_ratio)
+
+client.set_event_callback("paint_ui", paint)
+
+client.set_event_callback("aim_miss", aim_miss)
+client.set_event_callback("aim_hit", aim_hit)
+client.set_event_callback("aim_fire", aim_fire)
+
+function reset()
+    for_rendering = {}
+    reset_def()
+end
+
+client.set_event_callback("round_prestart", reset)
+
+function setup_commanding(cmd)
+    local lp = entity.get_local_player()
+    update_data(cmd, lp, client.current_threat())
+    local state = player.get_state(cmd, lp)
+    ind.scoped.state_name = menu.aa_options.manual_base:get() == "None" and ("-" .. string.upper(lua.conds_no_g[player.get_state(cmd, lp)]) .. "-") or ("-" .. string.upper(menu.aa_options.manual_base:get()) .. "-")
+    local avoid_backstabing = false
+    local safe_head = false
+    local side = "none"
+    if menu.misc.avoid_backstab:get() then
+        if target_data.en_num ~= nil then
+            avoid_backstabing = avoid_backstab(lp, target_data.en_num)
+        end
+    end
+    if(menu.builder[state + 1].enable:get()) then
+        tab = menu.builder[state + 1]
+    else
+        tab = menu.builder[1]
+    end
+    if menu.aa_options.safe_head:get() then
+        if lp_data.jumping or not lp_data.ground then
+            if lp_data.weapon == "CKnife" or lp_data.weapon == "CWeaponTaser" then
+                safe_head = true
+            end
+        end
+    end
+    if menu.aa_options.defensive:get() then
+        side = body_freestand(lp)
+    end
+    builder(cmd, state, tab, avoid_backstabing, lp, safe_head, side)
+    aa_setting(cmd)
+    charging(lp)
+end
+
+function pre_rendering()
+    if #menu.misc.animfix:get() == 0 then return end
+    local lp = entity.get_local_player()
+    if lp == nil or not entity.is_alive(lp) then return end
+    local local_index = c_entity.new(lp)
+    local local_anim_state = local_index:get_anim_state()
+    if menu.misc.animfix:get("Legs") then
+        entity.set_prop(lp, "m_flPoseParameter", 1, globals.tickcount() % 4 > 1 and 0.5 or 1)
+    end
+    if menu.misc.animfix:get("Jumping") then
+        entity.set_prop(lp, "m_flPoseParameter", client.random_int(0, 10) / 10, 6)
+    end
+    if menu.misc.animfix:get("Dirty sprite") then
+        local self_anim_overlay = local_index:get_anim_overlay(12)
+        if not self_anim_overlay then return end
+        self_anim_overlay.weight = player.get_velocity(lp) / 30
+    end
+end
+
+client.set_event_callback('pre_render', pre_rendering)
+
+function round_start()
+    set_on()
+    reset_tick()
+    reset()
+end
+
+menu.misc.filter_console:set_callback(filter_console)
+filter_console()
+menu.misc.cvar_optimizer:set_callback(fps_opt)
+fps_opt()
+menu.misc.teammate_whitelist:set_callback(set_on)
+client.set_event_callback("setup_command", setup_commanding)
+client.set_event_callback('round_start', round_start)
+
+-- Defensive check system
+client.set_event_callback('run_command', function(cmd)
+    defensive_check.last_cmd = cmd.command_number
+end)
+
+client.set_event_callback('predict_command', function(arg_140_0)
+    local lp = entity.get_local_player()
+    if not lp or defensive_check.last_cmd ~= arg_140_0.command_number then
         return
     end
 
@@ -1830,3252 +3718,347 @@ client.set_event_callback('predict_command', function(cmd)
     end
 
     defensive_check.lc_left = math.min(14, math.max(0, defensive_check.tickbase_max - tickbase - 1))
-    local val 
-    if antiaim_system[id].scholnik_exp:get() and check_charge() then
-        val = globals.tickcount() % 4 == 0
-    else
-        val = defensive_check.lc_left > 0
-    end
-    defensive_check.defensive = val
+    defensive_check.defensive = defensive_check.lc_left > 0
 end)
 
-client.set_event_callback('run_command', function(cmd)
-    defensive_check.last_cmd = cmd.command_number
-    if antiaim_system[id].scholnik_exp:get() and check_charge() then
-        cmd.force_defensive = globals.tickcount() % 4 == 0
-    end
-end)
-
-function is_defensive_active(lp)
-    if not check_charge() then return false end
-    return defensive_check.defensive
-end
+pui.setup({menu.builder, menu.aa_options, menu.misc, menu.visuals})
 
 
+-- local function calculate_damage_to_stomach(weapon_idx, distance, enemy_armor)
+--     local weapon = csgo_weapons[weapon_idx]
+--     if not weapon then return 0 end
+    
+--     local weapon_adjust = weapon.damage
+--     local dmg_after_range = (weapon_adjust * math.pow(weapon.range_modifier, (distance * 0.002)))
+    
+--     -- Проверяем существование armor_ratio
+--     if weapon.armor_ratio then
+--         -- Используем ту же логику расчета урона с броней, что и в ENEMY_DMG_HIT.lua
+--         local newdmg = dmg_after_range * (weapon.armor_ratio * 0.5)
+--         if dmg_after_range - (dmg_after_range * (weapon.armor_ratio * 0.5)) * 0.5 > enemy_armor then
+--             newdmg = dmg_after_range - (enemy_armor / 0.5)
+--         end
+        
+--         -- Применяем множитель для stomach (1.25)
+--         return newdmg * 1.25
+--     else
+--         -- Если armor_ratio не существует, используем простой расчет
+--         local base_damage = dmg_after_range * 1.25
+--         if enemy_armor > 0 then
+--             base_damage = base_damage * 0.45
+--         end
+--         return base_damage
+--     end
+-- end
 
-client.set_event_callback("run_command", function(cmd)
-    breaker.cmd = cmd.command_number
-    if cmd.chokedcommands == 0 then
-        breaker.origin = vector(entity.get_origin(entity.get_local_player()))
-        if breaker.last_origin ~= nil then
-            breaker.tp_dist = (breaker.origin - breaker.last_origin):length2dsqr()
-            gram_update(breaker.tp_data, breaker.tp_dist, true)
+local function calculate_damage_to_stomach(enemy_idx)
+    local local_player = entity.get_local_player()
+    if not local_player or not entity.is_alive(local_player) then return 0 end
+    
+    local weapon = entity.get_player_weapon(local_player)
+    if not weapon then return 0 end
+    
+    local eye_x, eye_y, eye_z = client.eye_position()
+    if not eye_x then return 0 end
+    
+    local hitboxes = {3, 4, 5, 6}
+    local max_damage = 0
+    
+    for i = 1, #hitboxes do
+        local hx, hy, hz = entity.hitbox_position(enemy_idx, hitboxes[i])
+        if hx then
+            local hit_ent, damage = client.trace_bullet(local_player, eye_x, eye_y, eye_z, hx, hy, hz, false)
+            if damage and damage > max_damage then
+                max_damage = damage
+            end
         end
-        breaker.last_origin = breaker.origin
     end
     
-end)
-
-local yaw_direction = 0
-local last_press_t_dir = 0
-
-local run_direction = function()
-    ui.set(ref.freestand[1], lua_menu.antiaim.yaw_direction:get("Freestanding"))
-    ui.set(ref.freestand[2], lua_menu.antiaim.key_freestand:get() and 'Always on' or 'On hotkey')
-
-    if yaw_direction ~= 0 then
-        ui.set(ref.freestand[1], false)
-    end
-
-    if lua_menu.antiaim.yaw_direction:get("Edge Yaw") then
-        ui.set(ref.edgeyaw, lua_menu.antiaim.key_edge_yaw:get())
-    else
-        ui.set(ref.edgeyaw, false)
-    end
-
-    if lua_menu.antiaim.yaw_direction:get("Manual") and lua_menu.antiaim.key_right:get() and last_press_t_dir + 0.2 < globals.curtime() then
-        yaw_direction = yaw_direction == 90 and 0 or 90
-        ui.set(ref.yawbase, "Local view")
-        last_press_t_dir = globals.curtime()
-    elseif lua_menu.antiaim.yaw_direction:get("Manual") and lua_menu.antiaim.key_left:get() and last_press_t_dir + 0.2 < globals.curtime() then
-        yaw_direction = yaw_direction == -90 and 0 or -90
-        ui.set(ref.yawbase, "Local view")
-        last_press_t_dir = globals.curtime()
-    elseif lua_menu.antiaim.yaw_direction:get("Manual") and lua_menu.antiaim.key_forward:get() and last_press_t_dir + 0.2 < globals.curtime() then
-        yaw_direction = yaw_direction == 180 and 0 or 180
-        ui.set(ref.yawbase, "Local view")
-        last_press_t_dir = globals.curtime()
-    elseif last_press_t_dir > globals.curtime() then
-        last_press_t_dir = globals.curtime()
-    end
+    return max_damage
 end
 
-anti_knife_dist = function (x1, y1, z1, x2, y2, z2)
-    return math.sqrt((x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2)
-end
-
-local function is_vulnerable()
-    for _, v in ipairs(entity.get_players(true)) do
-        local flags = (entity.get_esp_data(v)).flags
-        if bit.band(flags, bit.lshift(1, 11)) ~= 0 then
-            return true
-        end
-    end
-    return false
-end
-
-local function safe_func()  
-    ui.set(ref.yawjitter[1], "Off")
-    ui.set(ref.yaw[1], '180')
-    ui.set(ref.bodyyaw[1], "Static")
-    ui.set(ref.bodyyaw[2], 1)
-    ui.set(ref.yaw[2], 14)
-    ui.set(ref.pitch[2], 89)
-end
-
-local current_tickcount = 0
-local to_jitter = false
-local to_defensive = true
-local first_execution = true
-local yaw_amount = 0
-
-local function apply_anti_bruteforce()
-    if not lua_menu.antiaim.addons:get("Anti-Bruteforce") then return end
-    local d = ui.get(ref.bodyyaw[2])
-    ui.set(ref.bodyyaw[2], d * -1)
-end
-
-local function get_velocity(player)
-    local x,y,z = entity.get_prop(player, "m_vecVelocity")
-    if x == nil then return end
-    return math.sqrt(x*x + y*y + z*z)
-end
-
-local function aa_setup(cmd)
-    local lp = entity.get_local_player()
-    local tp_amount = get_average(breaker.tp_data)/get_velocity(entity.get_local_player())*100 
-
-    if lp == nil then return end
-    if player_state(cmd) == "Duck-Moving" and antiaim_system[8].enable:get() then id = 8
-    elseif player_state(cmd) == "Duck" and antiaim_system[7].enable:get() then id = 7
-    elseif player_state(cmd) == "Air+C" and antiaim_system[6].enable:get() then id = 6
-    elseif player_state(cmd) == "Air" and antiaim_system[5].enable:get() then id = 5
-    elseif player_state(cmd) == "Moving" and antiaim_system[4].enable:get() then id = 4
-    elseif player_state(cmd) == "Walking" and antiaim_system[3].enable:get() then id = 3
-    elseif player_state(cmd) == "Stand" and antiaim_system[2].enable:get() then id = 2
-    else id = 1 end
-
-    ui.set(ref.roll[1], 0)
-
-    run_direction()
-
-    if antiaim_system[id].delay_type:get() == "Default" and (globals.tickcount() > current_tickcount + antiaim_system[id].yaw_delay:get()) then
-        if cmd.chokedcommands == 0 then
-            to_jitter = not to_jitter
-            current_tickcount = globals.tickcount()
-        end
-    elseif antiaim_system[id].delay_type:get() == "Random From To" and (globals.tickcount() > current_tickcount + math.random(antiaim_system[id].from_delay:get(), antiaim_system[id].to_delay:get())) then
-        if cmd.chokedcommands == 0 then
-            to_jitter = not to_jitter
-            current_tickcount = globals.tickcount()
-        end
-    elseif globals.tickcount() <  current_tickcount then
-        current_tickcount = globals.tickcount()
-    end
-
-    ui.set(ref.fsbodyyaw, false)
-    ui.set(ref.pitch[1], "Custom")
-    ui.set(ref.yawbase, lua_menu.antiaim.yaw_base:get())
-
-    local selected_builder_def = antiaim_system[id].defensive:get() and antiaim_system[id].defensive_type:get() == "Builder" and is_defensive_active() --[[is_defensive]]
-
-    if selected_builder_def then
-        ui.set(ref.yawjitter[1], antiaim_system[id].def_mod_type:get())
-        ui.set(ref.yawjitter[2], antiaim_system[id].def_mod_dm:get())
-        ui.set(ref.bodyyaw[1], antiaim_system[id].def_body_yaw_type:get())
-        ui.set(ref.bodyyaw[2], antiaim_system[id].def_body_slider:get())
-        yaw_amount = yaw_direction == 0 and antiaim_system[id].def_yaw_value:get() or yaw_direction
-    else
-        ui.set(ref.yawjitter[1], antiaim_system[id].mod_type:get())
-        ui.set(ref.yawjitter[2], antiaim_system[id].mod_dm:get())
-        if antiaim_system[id].yaw_type:get() == "Delay" then
-            ui.set(ref.bodyyaw[1], "Static")
-            ui.set(ref.bodyyaw[2], to_jitter and 1 or -1)
-        else
-            ui.set(ref.bodyyaw[1], antiaim_system[id].body_yaw_type:get())
-            ui.set(ref.bodyyaw[2], antiaim_system[id].body_slider:get())
-        end
-    end
-
-    if is_defensive_active() --[[is_defensive]] and antiaim_system[id].defensive:get() and antiaim_system[id].defensive_type:get() == "Default" and antiaim_system[id].defensive_yaw:get() == "Spin" then
-        ui.set(ref.yaw[1], 'Spin')
-    else
-        ui.set(ref.yaw[1], '180')
-    end
-    if not antiaim_system[id].scholnik_exp:get() then
-        cmd.force_defensive = antiaim_system[id].force_def:get() and to_defensive
-    end
-
-    local desync_type = entity.get_prop(lp, 'm_flPoseParameter', 11) * 120 - 60
-    local desync_side = desync_type > 0
-
-    if not selected_builder_def then
-        if is_defensive_active() --[[is_defensive]] and antiaim_system[id].defensive:get() and antiaim_system[id].defensive_type:get() == "Default" then
-            if antiaim_system[id].defensive_yaw:get() == "Spin" then
-                yaw_amount = antiaim_system[id].yaw_value:get()
-            elseif antiaim_system[id].defensive_yaw:get() == "Jitter" then
-                yaw_amount = desync_side and antiaim_system[id].yaw_value_jitter1:get() or antiaim_system[id].yaw_value_jitter2:get()
-            elseif antiaim_system[id].defensive_yaw:get() == "Opposite" then
-                yaw_amount = antiaim_system[id].yaw_value_opposite:get()
-            elseif antiaim_system[id].defensive_yaw:get() == "Random" then
-                yaw_amount = math.random(antiaim_system[id].yaw_value_random1:get(), antiaim_system[id].yaw_value_random2:get())
-            else
-                yaw_amount = desync_side and randomize_value(antiaim_system[id].yaw_left:get(), antiaim_system[id].yaw_random:get()) or randomize_value(antiaim_system[id].yaw_right:get(), antiaim_system[id].yaw_random:get())
-            end
-        else
-            yaw_amount = desync_side and randomize_value(antiaim_system[id].yaw_left:get(), antiaim_system[id].yaw_random:get()) or randomize_value(antiaim_system[id].yaw_right:get(), antiaim_system[id].yaw_random:get())
-            ui.set(ref.pitch[2], 89)
-        end
-    end
-
-
-    if is_defensive_active() --[[is_defensive]] and antiaim_system[id].defensive:get() then
-        if antiaim_system[id].defensive_pitch:get() == "Custom" then
-            ui.set(ref.pitch[2], antiaim_system[id].pitch_value:get())
-        elseif antiaim_system[id].defensive_pitch:get() == "Jitter" then
-            ui.set(ref.pitch[2], desync_side and antiaim_system[id].pitch_value1:get() or antiaim_system[id].pitch_value2:get())
-        elseif antiaim_system[id].defensive_pitch:get() == "Random" then
-            ui.set(ref.pitch[2], math.random(antiaim_system[id].pitch_random_value1:get(), antiaim_system[id].pitch_random_value2:get()))
-        elseif antiaim_system[id].defensive_pitch:get() == "Unmatched Undetect" then 
-            ui.set(ref.pitch[2], math.random(69, 69))
-        elseif antiaim_system[id].defensive_pitch:get() == "Spin" then
-            local speed = antiaim_system[id].pitch_spin_speed:get()
-            local range = antiaim_system[id].pitch_spin_value:get()
-            ui.set(ref.pitch[2], (-1 + -math.sin(globals.curtime() * speed) * range))
-        else
-            ui.set(ref.pitch[2], 89)
-        end
-    end
-
-    ui.set(ref.yaw[2], yaw_direction == 0 and yaw_amount or yaw_direction)
-
+local function resolver_update()
     local players = entity.get_players(true)
-    if lua_menu.antiaim.addons:get("Spin AA On Warmup") then
-        if entity.get_prop(entity.get_game_rules(), "m_bWarmupPeriod") == 1 then
-            ui.set(ref.yaw[1], "Spin")
-            ui.set(ref.yaw[2], 20)
-            ui.set(ref.yawjitter[2], 0)
-            ui.set(ref.bodyyaw[1], "Static")
-            ui.set(ref.bodyyaw[2], 0)
-            ui.set(ref.pitch[1], "Custom")
-            ui.set(ref.pitch[2], 0) 
-        end
-    end
-
-    if lua_menu.antiaim.addons:get("Bomb E Fix") then
-        local pitch = ui.reference("AA", "Anti-aimbot angles", "Pitch")
-        local yaw, yaw_offset = ui.reference("AA", "Anti-aimbot angles", "Yaw")
-        local yaw_base = ui.reference("AA", "Anti-aimbot angles", "Yaw base")
-        local yaw_jitter, yaw_jitter_slider = ui.reference("AA", "Anti-aimbot angles", "Yaw jitter")
-        local body_yaw, body_yaw_left, body_yaw_right = ui.reference("AA", "Anti-aimbot angles", "Body yaw")
-        -- Helper to make a menu item overrideable (matching Neverlose API's override method behavior)
-        local function make_overrideable(ref_val)
-            local obj = {
-                ref = ref_val,
-                original = nil,
-                is_overridden = false
-            }
-            
-            function obj:override(val)
-                if not self.is_overridden then
-                    self.original = ui.get(self.ref)
-                    self.is_overridden = true
-                end
-                ui.set(self.ref, val)
-            end
-            
-            function obj:restore()
-                if self.is_overridden then
-                    ui.set(self.ref, self.original)
-                    self.is_overridden = false
-                    self.original = nil
-                end
-            end
-            
-            return obj
-        end
-        local refs = {
-            yaw_base = make_overrideable(yaw),
-            pitch = make_overrideable(pitch),
-            jyaw_slider = make_overrideable(yaw_jitter_slider),
-            left_limit = make_overrideable(body_yaw_left),
-            right_limit = make_overrideable(body_yaw_right),
-            base = make_overrideable(yaw_base),
-        }
-        -- Helper function to check if a player has the C4 bomb in their inventory
-        local function player_has_bomb(player)
-            for i = 0, 63 do
-                local weapon_ent = entity.get_prop(player, "m_hMyWeapons", i)
-                if weapon_ent ~= nil then
-                    local classname = entity.get_classname(weapon_ent)
-                    if classname == "CC4" then
-                        return true
-                    end
-                end
-            end
-            return false
-        end
-        -- Hook the setup_command callback
-        client.set_event_callback("setup_command", function(pnmd)
-            local lp = entity.get_local_player()
-            
-            -- If local player is invalid, dead, or has no weapon, restore overrides and exit
-            if lp == nil or not entity.is_alive(lp) or entity.get_player_weapon(lp) == nil then
-                for _, r in pairs(refs) do
-                    r:restore()
-                end
-                return
-            end
-            
-            local iTeamNum = entity.get_prop(lp, "m_iTeamNum")
-            local bInBombZone = entity.get_prop(lp, "m_bInBombZone")
-            
-            local ct = iTeamNum == 3
-            local has_bomb = player_has_bomb(lp)
-            local t = (iTeamNum == 2) and has_bomb
-            
-            local bInBombZone_t = (bInBombZone == 1 or bInBombZone == true)
-            local is_down = client.key_state(69) -- 69 is Key 'E'
-            
-            if bInBombZone_t and not t and not ct and is_down then
-                refs.jyaw_slider:override(0)
-                refs.left_limit:override(0)
-                refs.right_limit:override(0)
-                refs.pitch:override("Off")
-                refs.yaw_base:override("Off")
-                refs.base:override("Local view")
-            else
-                for _, r in pairs(refs) do
-                    r:restore()
-                end
-            end
-            
-            if bInBombZone_t and not t and not ct then
-                pnmd.in_use = 0
-            end
-        end)
-        -- Restore settings on script unload/reload
-        client.set_event_callback("shutdown", function()
-            for _, r in pairs(refs) do
-                r:restore()
-            end
-        end)
-    end
-
-    local threat = client.current_threat()
-    local lp_weapon = entity.get_player_weapon(lp)
-    local lp_orig_x, lp_orig_y, lp_orig_z = entity.get_prop(lp, "m_vecOrigin")
-    local flags = entity.get_prop(lp, 'm_fFlags')
-    local jumpcheck = bit.band(flags, 1) == 0 or cmd.in_jump == 1
-    local ducked = entity.get_prop(lp, 'm_flDuckAmount') > 0.7
-
-    if lua_menu.antiaim.addons:get("Safe Head") then
-        if lp_weapon ~= nil then
-            if lua_menu.antiaim.safe_head:get("Air+C Knife") then
-                if jumpcheck and ducked and entity.get_classname(lp_weapon) == "CKnife" then
-                    safe_func()
-                end
-            end
-            if lua_menu.antiaim.safe_head:get("Air+C Zeus") then
-                if jumpcheck and ducked and entity.get_classname(lp_weapon) == "CWeaponTaser" then
-                    safe_func()
-                end
-            end
-            if lua_menu.antiaim.safe_head:get("High Distance") then
-                if threat ~= nil then
-                    threat_x, threat_y, threat_z = entity.get_prop(threat, "m_vecOrigin")
-                    threat_dist = anti_knife_dist(lp_orig_x, lp_orig_y, lp_orig_z, threat_x, threat_y, threat_z)
-                    if threat_dist > 1000 then
-                        safe_func()
-                    end
-                end
-            end
-        end
-    end
-                
-    if lua_menu.antiaim.addons:get("Anti Backstab") then
-        for i=1, #players do
-            if players == nil then return end
-            enemy_orig_x, enemy_orig_y, enemy_orig_z = entity.get_prop(players[i], "m_vecOrigin")
-            distance_to = anti_knife_dist(lp_orig_x, lp_orig_y, lp_orig_z, enemy_orig_x, enemy_orig_y, enemy_orig_z)
-            weapon = entity.get_player_weapon(players[i])
-            if weapon == nil then return end
-            if entity.get_classname(weapon) == "CKnife" and distance_to <= 250 then
-                ui.set(ref.yaw[2], 180)
-                ui.set(ref.yawbase, "At targets")
-            end
-        end
-    end
-end
-
-local lastmiss = 0
-local function GetClosestPoint(A, B, P)
-    a_to_p = { P[1] - A[1], P[2] - A[2] }
-    a_to_b = { B[1] - A[1], B[2] - A[2] }
-
-    atb2 = a_to_b[1]^2 + a_to_b[2]^2
-
-    atp_dot_atb = a_to_p[1]*a_to_b[1] + a_to_p[2]*a_to_b[2]
-    t = atp_dot_atb / atb2
     
-    return { A[1] + a_to_b[1]*t, A[2] + a_to_b[2]*t }
-end
-
-client.set_event_callback("bullet_impact", function(e)                  
-    if not entity.is_alive(entity.get_local_player()) then return end
-    local ent = client.userid_to_entindex(e.userid)
-    if ent ~= client.current_threat() then return end
-    if entity.is_dormant(ent) or not entity.is_enemy(ent) then return end
-
-    local ent_origin = { entity.get_prop(ent, "m_vecOrigin") }
-    ent_origin[3] = ent_origin[3] + entity.get_prop(ent, "m_vecViewOffset[2]")
-    local local_head = { entity.hitbox_position(entity.get_local_player(), 0) }
-    local closest = GetClosestPoint(ent_origin, { e.x, e.y, e.z }, local_head)
-    local delta = { local_head[1]-closest[1], local_head[2]-closest[2] }
-    local delta_2d = math.sqrt(delta[1]^2+delta[2]^2)
-    if math.abs(delta_2d) <= 60 and globals.curtime() - lastmiss > 0.015 then
-        lastmiss = globals.curtime()
-        if lua_menu.misc.log_type:get("Screen") then
-            renderer.log(entity.get_player_name(ent).." Shot At You")
-        end
-    end
-end)
-
-local function handle_defensive_v2(cmd)
-
-    local delayed_v2 = false
-
-    if antiaim_system[id].defensive_v2:get() --[[and antiaim_system[id].defensive_v2_key:get() ]]then
-        if not lua_menu.antiaim.key_freestand:get() then
-            if globals.tickcount() % (antiaim_system[id].defensive_v2_ticks:get() * 2) == 0 then
-                delayed_v2 = not delayed_v2
+    if not menu.misc.resolver:get() then
+        -- if menu.misc.debug:get() then
+        --     print("Resolver disabled")
+        -- end
+        for i = 1, #players do
+            local player_index = players[i]
+            if entity.is_alive(player_index) then
+                plist.set(player_index, "Force body yaw value", 0)
+                plist.set(player_index, "Force body yaw", false)
             end
-
-            -- cmd.force_defensive = cmd.command_number % 7 == 0
-
-            if is_defensive_active() then
-                
-            ui.set(ref.yawjitter[1], 'Off')
-            ui.set(ref.bodyyaw[1], 'Static')
-
-                    if antiaim_system[id].defensive_v2_type:get() == 'Right' then
-                        ui.set(ref.yaw[2], 90)
-                        ui.set(ref.bodyyaw[2], delayed_v2 and -1 or 1)
-                    elseif antiaim_system[id].defensive_v2_type:get() == 'Left' then
-                        ui.set(ref.yaw[2], -90)
-                        ui.set(ref.bodyyaw[2], delayed_v2 and 1 or -1)
-                    elseif antiaim_system[id].defensive_v2_type:get() == 'Jitter' then    
-                        local range1 = antiaim_system[id].defensive_v2_jitter_value1:get()
-                        local range2 = antiaim_system[id].defensive_v2_jitter_value2:get()
-                        ui.set(ref.yaw[2], delayed_v2 and range1 or range2)
-                        ui.set(ref.bodyyaw[2], delayed_v2 and 1 or -1)
-                    elseif antiaim_system[id].defensive_v2_type:get() == 'Custom' then
-                        ui.set(ref.yaw[2], antiaim_system[id].defensive_v2_value:get())
-                        if antiaim_system[id].defensive_v2_value:get() < 0 then
-                            ui.set(ref.bodyyaw[2], delayed_v2 and 1 or -1)
-                        else
-                            ui.set(ref.bodyyaw[2], delayed_v2 and -1 or 1)
-                        end
-                    elseif antiaim_system[id].defensive_v2_type:get() == 'Random' then
-                        local range1 = antiaim_system[id].defensive_v2_random_type_from_value1:get()
-                        local range2 = antiaim_system[id].defensive_v2_random_type_to_value1:get()
-                        local range3 = antiaim_system[id].defensive_v2_random_type_from_value2:get()
-                        local range4 = antiaim_system[id].defensive_v2_random_type_to_value2:get()
-                        ui.set(ref.yaw[2], delayed_v2 and math.random(range1, range2) or math.random(range3, range4))
-                        ui.set(ref.bodyyaw[2], delayed_v2 and 1 or -1)
-                    elseif antiaim_system[id].defensive_v2_type:get() == 'Spin' then
-                        local speed = antiaim_system[id].defensive_v2_spin_type_speed:get()
-                        local range = antiaim_system[id].defensive_v2_spin_type_value:get()
-                        ui.set(ref.yaw[2], (-1 + -math.sin(globals.curtime() * speed) * range))
-                        ui.set(ref.bodyyaw[2], delayed_v2 and 1 or -1)
-
-                    end
-                        if antiaim_system[id].defensive_v2_pitch:get() == 'Zero' then
-                            ui.set(ref.pitch[2], 0)
-                        elseif antiaim_system[id].defensive_v2_pitch:get() == 'Up' then
-                            ui.set(ref.pitch[2], -89)
-                        elseif antiaim_system[id].defensive_v2_pitch:get() == 'Down' then
-                            ui.set(ref.pitch[2], 89)
-                        elseif antiaim_system[id].defensive_v2_pitch:get() == 'Random' then
-                            local range1 = antiaim_system[id].defensive_v2_random_pitch_value1:get()
-                            local range2 = antiaim_system[id].defensive_v2_random_pitch_value2:get()
-                            ui.set(ref.pitch[2], math.random(range1, range2))
-                        elseif antiaim_system[id].defensive_v2_pitch:get() == 'Lerp' then
-                            local speed = antiaim_system[id].defensive_v2_lerp_pitch_speed:get()
-                            local range = antiaim_system[id].defensive_v2_lerp_pitch_value:get()
-                            ui.set(ref.pitch[2], (-1 + -math.sin(globals.curtime() * speed) * range))
-                        -- end
-                    -- end 
-                    -- ui.set(ref.yawjitter[1], 'Off')
-                    -- ui.set(ref.bodyyaw[1], 'Static')
-                else
-                    -- ui.set(ref.yawjitter[1], 'Off')
-                    -- ui.set(ref.bodyyaw[1], 'Static')
-                    -- ui.set(ref.yaw[2], 4)
-                    -- ui.set(ref.yaw[1], '180')
-                    -- ui.set(ref.bodyyaw[2], 1)
-                end
-            end
-        else
-            return 
         end
-    end
-end
-
-local function anim_breaker()
-    local lp = entity.get_local_player()
-    if not lp then return end
-    if not entity.is_alive(lp) then return end
-
-    local self_index = c_entity.new(lp)
-    local self_anim_state = self_index:get_anim_state()
-    local body_lean_value = lua_menu.misc.animation_body_lean:get()
-
-    if not self_anim_state then
         return
     end
 
-    if lua_menu.misc.animation_ground:get() == "Static" then
-        ui.set(ref.leg_movement[1], "Always slide")
-        entity.set_prop(lp, "m_flPoseParameter", 1, 0)
-    elseif lua_menu.misc.animation_ground:get() == "Jitter" then
-        ui.set(ref.leg_movement[1], "Always slide")
-        entity.set_prop(lp, "m_flPoseParameter", globals.tickcount() %4 > 1 and 9/10 or 0, 0)
-    elseif lua_menu.misc.animation_ground:get() == "Moonwalk" then
-        ui.set(ref.leg_movement[1], "Never slide")
-        entity.set_prop(lp, 'm_flPoseParameter', 0, 7)
-    elseif lua_menu.misc.animation_ground:get() == "Randomize" then
-        ui.set(ref.leg_movement[1], "Always slide")
-        entity.set_prop(lp, "m_flPoseParameter", math.random(9, 10)/10, 0)
-    end
-    
-    if lua_menu.misc.animation_air:get() == "Static" then
-        entity.set_prop(lp, "m_flPoseParameter", 1, 6)
-    elseif lua_menu.misc.animation_air:get() == "Jitter" then
-        entity.set_prop(lp, "m_flPoseParameter", globals.tickcount() %4 > 1 and 9/10 or 0, 6)
-    elseif lua_menu.misc.animation_air:get() == "Randomize" then
-        entity.set_prop(lp, "m_flPoseParameter", math.random(0, 10)/10, 6)
-    elseif lua_menu.misc.animation_air:get() == "Moonwalk" then
-        self_anim_overlay = self_index:get_anim_overlay(6)
-
-        local x_velocity = entity.get_prop(lp, 'm_vecVelocity[0]')
-        if math.abs(x_velocity) >= 3 then
-            self_anim_overlay.weight = 1
-        end
-    end
-end
-
-local ragebot_logs
-local logs = {} do
-    local screen = {client.screen_size()}
-    local center = {screen[1]/2, screen[2]/2} 
-
-    math.lerp = function(name, value, speed)
-        return name + (value - name) * globals.absoluteframetime() * speed
+    local lp = entity.get_local_player()
+    if not lp or not entity.is_alive(lp) then 
+        -- if menu.misc.debug:get() then
+        --     print("Local player not alive")
+        -- end
+        return 
     end
 
-    ragebot_logs = function()
-        local offset, x, y = 0, screen[1] / 2, screen[2] / 1.4
-        local radius = 8
-        for idx, data in ipairs(logs) do
-            if (((globals.curtime() / 2) * 2.0) - data[3]) < 4.0 and not (#logs > 5 and idx < #logs - 5) then
-                data[2] = math.lerp(data[2], 255, 10)
-            else
-                data[2] = math.lerp(data[2], 0, 10)
-            end
-            offset = offset - 40 * (data[2] / 255)
-            local text_size_x, text_size_y = renderer.measure_text("", data[1])
-            local box_width, box_height = text_size_x + 13, 23
-    
-            -- Rounded rectangle with rounded glow
-            local function draw_rounded_rect_with_glow(x, y, width, height, radius, r, g, b, a, glow_strength)
-                -- Glow effect
-                local r, g ,b, a = lua_menu.misc.log_glow_color:get_color()
-                for i = 1, glow_strength do
-                    local glow_alpha = (data[2] / 255) * (30 / i)
-    
-                    -- Rounded glow (white color)
-                    renderer.circle(x + radius, y + radius, r, g, b, glow_alpha, radius + i, 180, 90) -- Top-left
-                    renderer.circle(x + width - radius, y + radius, r, g, b, glow_alpha, radius + i, 270, 90) -- Top-right
-                    renderer.circle(x + radius, y + height - radius, r, g, b, glow_alpha, radius + i, 90, 90) -- Bottom-left
-                    renderer.circle(x + width - radius, y + height - radius, r, g, b, glow_alpha, radius + i, 0, 90) -- Bottom-right
-    
-                    -- Glow rectangles along the edges
-                    renderer.rectangle(x + radius - i, y - i, width - radius * 2 + (i * 2), i * 2, r, g, b, glow_alpha) -- Top
-                    renderer.rectangle(x + radius - i, y + height - i, width - radius * 2 + (i * 2), i * 2, r, g, b, glow_alpha) -- Bottom
-                    renderer.rectangle(x - i, y + radius - i, i * 2, height - radius * 2 + (i * 2), r, g, b, glow_alpha) -- Left
-                    renderer.rectangle(x + width - i, y + radius - i, i * 2, height - radius * 2 + (i * 2), r, g, b, glow_alpha) -- Right
-                end
-    
-                -- Filled body
-                renderer.rectangle(x + radius, y, width - radius * 2, height, 20, 20, 20, data[2]) -- Middle
-                renderer.rectangle(x, y + radius, radius, height - radius * 2, 20, 20, 20, data[2]) -- Left
-                renderer.rectangle(x + width - radius, y + radius, radius, height - radius * 2, 20, 20, 20, data[2]) -- Right
-    
-                -- Rounded corners
-                renderer.circle(x + radius, y + radius, 20, 20, 20, data[2], radius, 180, 90) -- Top-left
-                renderer.circle(x + width - radius, y + radius, 20, 20, 20, data[2], radius, 270, 90) -- Top-right
-                renderer.circle(x + radius, y + height - radius, 20, 20, 20, data[2], radius, 90, 90) -- Bottom-left
-                renderer.circle(x + width - radius, y + height - radius, 20, 20, 20, data[2], radius, 0, 90) -- Bottom-right
-            end
-    
-            -- Draw rounded rectangle with rounded white glow
-            draw_rounded_rect_with_glow(
-                x - 8 - text_size_x / 2, y - offset - 9,
-                box_width, box_height, radius,
-                20, 20, 20, (data[2] / 255) * 255, 10
-            )
-    
-            -- Draw the text
-            renderer.text(x - 1 - text_size_x / 2, y - offset -4.2, 255, 255, 255, data[2], "", 0, data[1])
-    
-            -- Remove old logs
-            if data[2] < 0.1 or not entity.get_local_player() then
-                table.remove(logs, idx)
-            end
-        end
-    end
+    local desync_amount = adata.get_desync(2)
+    local body_yaw_newmethod_get_sda = 0  -- Initialize with default value
 
-    shot_logger.add = function(...)
-        args = { ... }
-        len = #args
-        for i = 1, len do
-            arg = args[i]
-            r, g, b = unpack(arg)
+    -- Получаем текущую цель
+    local target = client.current_threat()
     
-            msg = {}
-    
-            if #arg == 3 then
-                table.insert(msg, " ")
-            else
-                for i = 4, #arg do
-                    table.insert(msg, arg[i])
-                end
-            end
-            msg = table.concat(msg)
-    
-            if len > i then
-                msg = msg .. "\0"
-            end
-    
-            client.color_log(r, g, b, msg)
-        end
-    end
-    
-    shot_logger.bullet_impacts = {}
-    shot_logger.bullet_impact = function(e)
-        local tick = globals.tickcount()
-        local me = entity.get_local_player()
-        local user = client.userid_to_entindex(e.userid)
-        
-        if user ~= me then
-            return
-        end
-    
-        if #shot_logger.bullet_impacts > 150 then
-            shot_logger.bullet_impacts = { }
-        end
-    
-        shot_logger.bullet_impacts[#shot_logger.bullet_impacts+1] = {
-            tick = tick,
-            eye = vector(client.eye_position()),
-            shot = vector(e.x, e.y, e.z)
-        }
-    end
-    
-    shot_logger.get_inaccuracy_tick = function(pre_data, tick)
-        local spread_angle = -1
-        for k, impact in pairs(shot_logger.bullet_impacts) do
-            if impact.tick == tick then
-                local aim, shot = 
-                    (pre_data.eye-pre_data.shot_pos):angles(),
-                    (pre_data.eye-impact.shot):angles()
-    
-                    spread_angle = vector(aim-shot):length2d()
+    -- Если нет цели, используем первого вражеского игрока
+    if not target or not entity.is_alive(target) then
+        for i = 1, #players do
+            local player_index = players[i]
+            if entity.is_alive(player_index) and entity.get_prop(player_index, "m_iTeamNum") ~= entity.get_prop(lp, "m_iTeamNum") then
+                target = player_index
                 break
             end
         end
-    
-        return spread_angle
     end
     
-    shot_logger.get_safety = function(aim_data, target)
-        local has_been_boosted = aim_data.boosted
-        local plist_safety = plist.get(target, 'Override safe point')
-        local ui_safety = { ui.get(gamesense_refs.prefer_safe_point), ui.get(gamesense_refs.force_safe_point) or plist_safety == 'On' }
-    
-        if not has_been_boosted then
-            return -1
-        end
-    
-        if plist_safety == 'Off' or not (ui_safety[1] or ui_safety[2]) then
-            return 0
-        end
-    
-        return ui_safety[2] and 2 or (ui_safety[1] and 1 or 0)
-    end
-    
-    shot_logger.generate_flags = function(pre_data)
-        return {
-            pre_data.self_choke > 1 and 1 or 0,
-            pre_data.velocity_modifier < 1.00 and 1 or 0,
-            pre_data.flags.boosted and 1 or 0
-        }
-    end
-    
-    shot_logger.hitboxes = {"generic", "head", "chest", "stomach", "left arm", "right arm", "left leg", "right leg", "neck", "?", "gear"}
-    shot_logger.on_aim_fire = function(e)
-        local p_ent = e.target
-        local me = entity.get_local_player()
-    
-        shot_logger[e.id] = {
-            original = e,
-            dropped_packets = { },
-    
-            handle_time = globals.realtime(),
-            self_choke = globals.chokedcommands(),
-    
-            flags = {
-                boosted = e.boosted
-            },
-    
-            feet_yaw = entity.get_prop(p_ent, 'm_flPoseParameter', 11)*120-60,
-            correction = plist.get(p_ent, 'Correction active'),
-    
-            safety = shot_logger.get_safety(e, p_ent),
-            shot_pos = vector(e.x, e.y, e.z),
-            eye = vector(client.eye_position()),
-            view = vector(client.camera_angles()),
-    
-            velocity_modifier = entity.get_prop(me, 'm_flVelocityModifier'),
-            total_hits = entity.get_prop(me, 'm_totalHitsOnServer'),
-    
-            history = globals.tickcount() - e.tick
-        }
-    end
-    shot_logger.on_aim_hit = function(e)
-        if not (lua_menu.misc.log_type:get('Console') and lua_menu.misc.log_type:get('Console')) then
-            return
-        end
-    
-        if shot_logger[e.id] == nil then
-            return 
-        end
-    
-        local info = 
-        {
-            type = math.max(0, entity.get_prop(e.target, 'm_iHealth')) > 0,
-            prefix = { lua_menu.misc.log_hit_color:get_color() },
-            hit = { lua_menu.misc.log_hit_color:get_color() },
-            name = entity.get_player_name(e.target),
-            hitgroup = shot_logger.hitboxes[e.hitgroup + 1] or '?',
-            flags = string.format('%s', table.concat(shot_logger.generate_flags(shot_logger[e.id]))),
-            aimed_hitgroup = shot_logger.hitboxes[shot_logger[e.id].original.hitgroup + 1] or '?',
-            aimed_hitchance = string.format('%d%%', math.floor(shot_logger[e.id].original.hit_chance + 0.5)),
-            hp = math.max(0, entity.get_prop(e.target, 'm_iHealth')),
-            spread_angle = string.format('%.2f°', shot_logger.get_inaccuracy_tick(shot_logger[e.id], globals.tickcount())),
-            correction = string.format('%d:%d°', shot_logger[e.id].correction and 1 or 0, (shot_logger[e.id].feet_yaw < 10 and shot_logger[e.id].feet_yaw > -10) and 0 or shot_logger[e.id].feet_yaw)
-        }
-    
-        shot_logger.add({ info.prefix[1], info.prefix[2], info.prefix[3], '~ FineBit'}, 
-                        { 134, 134, 134, ' » ' }, 
-                        { 200, 200, 200, info.type and 'Damaged ' or 'Killed ' }, 
-                        { info.hit[1], info.hit[2], info.hit[3],  info.name }, 
-                        { 200, 200, 200, ' in the ' }, 
-                        { info.hit[1], info.hit[2], info.hit[3], info.hitgroup }, 
-                        { 200, 200, 200, info.type and info.hitgroup ~= info.aimed_hitgroup and ' (' or ''},
-                        { info.hit[1], info.hit[2], info.hit[3], info.type and (info.hitgroup ~= info.aimed_hitgroup and info.aimed_hitgroup) or '' },
-                        { 200, 200, 200, info.type and info.hitgroup ~= info.aimed_hitgroup and ')' or ''},
-                        { 200, 200, 200, info.type and ' for ' or '' },
-                        { info.hit[1], info.hit[2], info.hit[3], info.type and e.damage or '' },
-                        { 200, 200, 200, info.type and e.damage ~= shot_logger[e.id].original.damage and ' (' or ''},
-                        { info.hit[1], info.hit[2], info.hit[3], info.type and (e.damage ~= shot_logger[e.id].original.damage and shot_logger[e.id].original.damage) or '' },
-                        { 200, 200, 200, info.type and e.damage ~= shot_logger[e.id].original.damage and ')' or ''},
-                        { 200, 200, 200, info.type and ' damage' or '' },
-                        { 200, 200, 200, info.type and ' (' or '' }, { info.hit[1], info.hit[2], info.hit[3], info.type and info.hp or '' }, { 200, 200, 200, info.type and ' hp remaning)' or '' },
-                        { 200, 200, 200, ' ['}, { info.hit[1], info.hit[2], info.hit[3], info.spread_angle }, { 200, 200, 200, ' | ' }, { info.hit[1], info.hit[2], info.hit[3], info.correction}, { 200, 200, 200, ']' },
-                        { 200, 200, 200, ' (hc: ' }, { info.hit[1], info.hit[2], info.hit[3], info.aimed_hitchance }, { 200, 200, 200, ' | safety: ' }, { info.hit[1], info.hit[2], info.hit[3], shot_logger[e.id].safety },
-                        { 200, 200, 200, ' | history(Δ): ' }, { info.hit[1], info.hit[2], info.hit[3], shot_logger[e.id].history }, { 200, 200, 200, ' | flags: ' }, { info.hit[1], info.hit[2], info.hit[3], info.flags },
-                        { 200, 200, 200, ')' })
-    end
-    
-    shot_logger.on_aim_miss = function(e)
-        if not (lua_menu.misc.log_type:get('Console') and lua_menu.misc.log_type:get('Console')) then
-            return
-        end
-    
-        local me = entity.get_local_player()
-        local info = 
-        {
-            prefix = {lua_menu.misc.log_miss_color:get_color()},
-            hit = {lua_menu.misc.log_miss_color:get_color()},
-            name = entity.get_player_name(e.target),
-            hitgroup = shot_logger.hitboxes[e.hitgroup + 1] or '?',
-            flags = string.format('%s', table.concat(shot_logger.generate_flags(shot_logger[e.id]))),
-            aimed_hitgroup = shot_logger.hitboxes[shot_logger[e.id].original.hitgroup + 1] or '?',
-            aimed_hitchance = string.format('%d%%', math.floor(shot_logger[e.id].original.hit_chance + 0.5)),
-            hp = math.max(0, entity.get_prop(e.target, 'm_iHealth')),
-            reason = e.reason,
-            spread_angle = string.format('%.2f°', shot_logger.get_inaccuracy_tick(shot_logger[e.id], globals.tickcount())),
-            correction = string.format('%d:%d°', shot_logger[e.id].correction and 1 or 0, (shot_logger[e.id].feet_yaw < 10 and shot_logger[e.id].feet_yaw > -10) and 0 or shot_logger[e.id].feet_yaw)
-        }
-    
-        if info.reason == '?' then
-            info.reason = 'unknown';
-    
-            if shot_logger[e.id].total_hits ~= entity.get_prop(me, 'm_totalHitsOnServer') then
-                info.reason = 'damage rejection';
-            end
-        end
-    
-        shot_logger.add({ info.prefix[1], info.prefix[2], info.prefix[3], '~ FineBit'}, 
-                        { 134, 134, 134, ' » ' }, 
-                        { 200, 200, 200, 'Missed shot at ' }, 
-                        { info.hit[1], info.hit[2], info.hit[3],  info.name }, 
-                        { 200, 200, 200, ' in the ' }, 
-                        { info.hit[1], info.hit[2], info.hit[3], info.hitgroup }, 
-                        { 200, 200, 200, ' due to '},
-                        { info.hit[1], info.hit[2], info.hit[3], info.reason },
-                        { 200, 200, 200, ' ['}, { info.hit[1], info.hit[2], info.hit[3], info.spread_angle }, { 200, 200, 200, ' | ' }, { info.hit[1], info.hit[2], info.hit[3], info.correction}, { 200, 200, 200, ']' },
-                        { 200, 200, 200, ' (hc: ' }, { info.hit[1], info.hit[2], info.hit[3], info.aimed_hitchance }, { 200, 200, 200, ' | safety: ' }, { info.hit[1], info.hit[2], info.hit[3], shot_logger[e.id].safety },
-                        { 200, 200, 200, ' | history(Δ): ' }, { info.hit[1], info.hit[2], info.hit[3], shot_logger[e.id].history }, { 200, 200, 200, ' | flags: ' }, { info.hit[1], info.hit[2], info.hit[3], info.flags },
-                        { 200, 200, 200, ')' })
-    end
-    
-    client.set_event_callback('aim_fire', shot_logger.on_aim_fire)
-    client.set_event_callback('aim_miss', shot_logger.on_aim_miss)
-    client.set_event_callback('aim_hit', shot_logger.on_aim_hit)
-    client.set_event_callback('bullet_impact', shot_logger.bullet_impact)
-    
-    renderer.log = function(text)
-        table.insert(logs, { text, 0, ((globals.curtime() / 2) * 2.0)})
-    end
-
-    local hitgroup_names = {'generic', 'head', 'chest', 'stomach', 'left arm', 'right arm', 'left leg', 'right leg', 'neck', '?', 'gear'}
-
-    local function aim_hit(e)
-        if not lua_menu.misc.log:get() then return end
-        local group = hitgroup_names[e.hitgroup + 1] or '?'
-        if lua_menu.misc.log_type:get("Screen") then
-            renderer.log(string.format('Hit %s in the %s for %d damage', entity.get_player_name(e.target), group, e.damage))
+    -- Вычисляем desync для цели
+    if target and entity.is_alive(target) then
+        local pose_param = entity.get_prop(target, 'm_flPoseParameter', 11)
+        if pose_param then
+            body_yaw_newmethod_get_sda = math.floor(pose_param * 120 - 60)
         end
     end
-    client.set_event_callback('aim_hit', aim_hit)
-
-
-    local function aim_miss(e)
-        if not lua_menu.misc.log:get() then return end
-        local group = hitgroup_names[e.hitgroup + 1] or '?'
-        if lua_menu.misc.log_type:get("Screen") then
-            renderer.log(string.format('Missed %s in the %s due to %s', entity.get_player_name(e.target), group, e.reason))
+    
+    -- if menu.misc.debug:get() then
+    --     print("Desync amount:", tostring(desync_amount))
+    -- end
+    if target and entity.is_alive(target) then
+        if menu.misc.debug:get() then 
+            -- print("Target:", entity.get_player_name(target), "Body yaw:", body_yaw_newmethod_get_sda)
         end
     end
-    client.set_event_callback('aim_miss', aim_miss)
-end
-
-    local rgba_to_hex = function(b, c, d, e)
-        return string.format('%02x%02x%02x%02x', b, c, d, e)
-    end
-
-    function lerp(a, b, t)
-        return a + (b - a) * t
-    end
-
-    function clamp(x, minval, maxval)
-        if x < minval then
-            return minval
-        elseif x > maxval then
-            return maxval
-        else
-            return x
-        end
-    end
-
-    local function text_fade_animation(x, y, speed, color1, color2, text, flag)
-        local final_text = ''
-        local curtime = globals.curtime()
-        for i = 0, #text do
-            local x = i * 10  
-            local wave = math.cos(8 * speed * curtime + x / 30)
-            local color = rgba_to_hex(
-                lerp(color1.r, color2.r, clamp(wave, 0, 1)),
-                lerp(color1.g, color2.g, clamp(wave, 0, 1)),
-                lerp(color1.b, color2.b, clamp(wave, 0, 1)),
-                color1.a
-            ) 
-            final_text = final_text .. '\a' .. color .. text:sub(i, i) 
-        end
-        
-        renderer.text(x, y, color1.r, color1.g, color1.b, color1.a, flag, nil, final_text)
-    end
-
-    local function doubletap_charged()
-        if not ui.get(ref.dt[1]) or not ui.get(ref.dt[2]) or ui.get(ref.fakeduck) then return false end
-        if not entity.is_alive(entity.get_local_player()) or entity.get_local_player() == nil then return end
-        local weapon = entity.get_prop(entity.get_local_player(), "m_hActiveWeapon")
-        if weapon == nil then return false end
-        local next_attack = entity.get_prop(entity.get_local_player(), "m_flNextAttack") + 0.01
-        local checkcheck = entity.get_prop(weapon, "m_flNextPrimaryAttack")
-        if checkcheck == nil then return end
-        local next_primary_attack = checkcheck + 0.01
-        if next_attack == nil or next_primary_attack == nil then return false end
-        return next_attack - globals.curtime() < 0 and next_primary_attack - globals.curtime() < 0
-    end
-
-    local scoped_space = 0
-    local main_font = "c-b"
-    local key_font = "c"
-
-    local function screen_indicator()
-        local lp = entity.get_local_player()
-        if lp == nil then return end
-        local ind_size = renderer.measure_text("cb", "FineBit")
-        local scpd = entity.get_prop(lp, "m_bIsScoped") == 1
-        scoped_space = math.lerp(scoped_space, scpd and 30 or 0, 20)
-        local condition = "GLOBAL"
-        if id == 1 then condition = "GLOBAL"
-        elseif id == 2 then condition = "STAND"
-        elseif id == 3 then condition = "SLOW-WALKING"
-        elseif id == 4 then condition = "RUN"
-        elseif id == 5 then condition = "AIR"
-        elseif id == 6 then condition = "AIR+"
-        elseif id == 7 then condition = "DUCK"
-        elseif id == 8 then condition = "DUCK+" end
-        local spaceind = 10
-
-        main_font = "c-d"
-        key_font = "c-d"
-
-        local new_check = lua_menu.misc.cross_ind:get()
-
-        lua_menu.misc.cross_color:override(true)
-        lua_menu.misc.key_color:override(true)
-        local r1, g1, b1, a1 = lua_menu.misc.cross_ind:get_color()
-        local r2, g2, b2, a2 = lua_menu.misc.cross_color:get_color()
-        local r3, g3, b3, a3 = lua_menu.misc.key_color:get_color()
-        local r, g, b, a = 255, 255, 255, 255
-        text_fade_animation(center[1] + scoped_space, center[2] + 30, -1, {r=r1, g=g1, b=b1, a=255}, {r=r2, g=g2, b=b2, a=255}, "FineBit", "-cd")
-        text_fade_animation(center[1] + scoped_space, center[2] + 40, -1, {r=r1, g=g1, b=b1, a=255}, {r=r2, g=g2, b=b2, a=255}, "Source", "-cd")
-        renderer.text(center[1] + scoped_space, center[2] + 50, r2, g2, b2, 255, "-cd", 0, condition)
-
-        if ui.get(ref.forcebaim)then
-            renderer.text(center[1] + scoped_space, center[2] + 50 + (spaceind), 255, 102, 117, 255, key_font, 0, new_check and "BODY" or "BODY")
-            spaceind = spaceind + 10
-        end
-
-        if ui.get(ref.os[2]) then
-            renderer.text(center[1] + scoped_space, center[2] + 50 + (spaceind), r3, g3, b3, 255, key_font, 0, new_check and "OSAA" or"OSAA")
-            spaceind = spaceind + 10
-        end
-
-        if ui.get(ref.minimum_damage_override[2]) then
-            renderer.text(center[1] + scoped_space, center[2] + 50 + (spaceind), r3, g3, b3, 255, key_font, 0, new_check and "DMG" or"DMG")
-            spaceind = spaceind + 10
-        end
-
-        if ui.get(ref.dt[1]) and ui.get(ref.dt[2]) then
-            if doubletap_charged() then
-                renderer.text(center[1] + scoped_space, center[2] + 50 + (spaceind), r3, g3, b3, a, key_font, 0, new_check and "DT" or "DT")
-            else
-                renderer.text(center[1] + scoped_space, center[2] + 50 + (spaceind), 255, 0, 0, 255, key_font, 0, new_check and "DT" or "DT")
-            end
-            spaceind = spaceind + 10
-        end
-
-        if ui.get(ref.freestand[1]) and ui.get(ref.freestand[2]) then
-            renderer.text(center[1] + scoped_space, center[2] + 50 + (spaceind), r3, g3, b3, a, key_font, 0, new_check and "FS" or "FS")
-            spaceind = spaceind + 10
-        end
-
-    end
-
-    local function damage_indicator()
-    local sizeX, sizeY = client.screen_size()
-
-    if lua_menu.misc.damage_indicator_style:get() == "Default" then
-        main_font = "d"
-    else
-        main_font = "-d"
-    end
-
-    if lua_menu.misc.damage_indicator:get() and entity.get_classname(weapon) ~= "CKnife"  then
-        if lua_menu.misc.damage_indicator_mode:get() == "Always" then
-            if ( ui.get(ref.minimum_damage_override[1]) and ui.get(ref.minimum_damage_override[2]) ) == false then
-                renderer.text(sizeX / 2 + 3, sizeY / 2 - 15, 255, 255, 255, 255, main_font or "cd", 0, ui.get(ref.minimum_damage))
-            else
-                renderer.text(sizeX / 2 + 3, sizeY / 2 - 15, 255, 255, 255, 255, main_font or "cd", 0, ui.get(ref.minimum_damage_override[3]))
-            end
-        elseif ui.get(ref.minimum_damage_override[1]) and ui.get(ref.minimum_damage_override[2]) and lua_menu.misc.damage_indicator_mode:get() == "On Bind" then
-            dmg = ui.get(ref.minimum_damage_override[3])
-            renderer.text(sizeX / 2 + 3, sizeY / 2 - 15, 255, 255, 255, 255, main_font or "cd", 0, dmg)
-        end
-    end
-end
-
-local function manual_arrows()
-    local sizeX, sizeY = client.screen_size()
-    local r, g, b, a = lua_menu.misc.manual_arrows:get_color()
-    if lua_menu.misc.manual_arrows:get() then
-        if yaw_direction == 90 then 
-            renderer.text(sizeX / 2 + 35, sizeY / 2 - 6.5, r, g, b, a, "bсd", 0, "⮚")
-        end
-        if yaw_direction == -90 then 
-        renderer.text(sizeX / 2 - 45, sizeY / 2 - 7.5, r, g, b, a, "bсd", 0, "⮘")
-        end
-    end
-end
-
-local ind = { } do
-    local screen = {client.screen_size()}
-    local center = {screen[1]/2, screen[2]/2} 
-
-    local defensive_alpha = 0
-    local defensive_amount = 0
-    local velocity_alpha = 0
-    local velocity_amount = 0
-    local blur_alpha = 0
-
-    --lua_menu.misc.velocity_style
-    --lua_menu.misc.defensive_style
-
-    renderer.rounded_rectangle = function(x, y, w, h, r, g, b, a, radius)
-        y = y + radius
-        local data_circle = {
-            {x + radius, y, 180},
-            {x + w - radius, y, 90},
-            {x + radius, y + h - radius * 2, 270},
-            {x + w - radius, y + h - radius * 2, 0},
-        }
-
-        local data = {
-            {x + radius, y, w - radius * 2, h - radius * 2},
-            {x + radius, y - radius, w - radius * 2, radius},
-            {x + radius, y + h - radius * 2, w - radius * 2, radius},
-            {x, y, radius, h - radius * 2},
-            {x + w - radius, y, radius, h - radius * 2},
-        }
-
-        for _, data in next, data_circle do
-            renderer.circle(data[1], data[2], r, g, b, a, radius, data[3], 0.25)
-        end
-
-        for _, data in next, data do
-            renderer.rectangle(data[1], data[2], data[3], data[4], r, g, b, a)
-        end
-    end
-
-    ind.velocity_ind = function()
-        local lp = entity.get_local_player()
-        if lp == nil then return end
-        local r, g, b, a = lua_menu.misc.velocity_window:get_color()
-        local vel_mod = entity.get_prop(lp, 'm_flVelocityModifier')
-        local svg_data = renderer.load_svg('<svg width="22" height="22" viewBox="0 0 16 16"><path fill="'..string.format("#%02x%02x%02x", r, g, b)..'" d="m13.259 13h-10.518c-0.35787 0.0023-0.68906-0.1889-0.866-0.5-0.18093-0.3088-0.18093-0.6912 0-1l5.259-9.015c0.1769-0.31014 0.50696-0.50115 0.864-0.5 0.3568-0.00121 0.68659 0.18986 0.863 0.5l5.26 9.015c0.1809 0.3088 0.1809 0.6912 0 1-0.1764 0.3097-0.5056 0.5006-0.862 0.5zm-6.259-3v2h2v-2zm0-5v4h2v-4z"/></svg>', 22, 22)
-
-        if not ui.is_menu_open() then
-            velocity_alpha = math.lerp(velocity_alpha, vel_mod < 1 and 255 or 0, 10)
-            velocity_amount = math.lerp(velocity_amount, vel_mod, 10)
-            blur_alpha = math.lerp(blur_alpha, vel_mod < 1 and 255 or 0, 10)
-        else
-            velocity_alpha = math.lerp(velocity_alpha, 255, 10)
-            velocity_amount = globals.tickcount() % 50/100 * 2
-            blur_alpha = math.lerp(blur_alpha, 255, 10)
-        end
-
-        if lua_menu.misc.velocity_style:get() == "Default" then
-            renderer.text(center[1], screen[2] / 3 - 10, 255, 255, 255, velocity_alpha, "dc", 0, "- velocity -")
-            renderer.rectangle(center[1]-50, screen[2] / 3, 100, 5, 0,0,0, velocity_alpha)
-            renderer.rectangle(center[1]-49, screen[2] / 3+1, (100*velocity_amount)-1, 3, r, g, b, velocity_alpha)
-        elseif lua_menu.misc.velocity_style:get() == "Gradient" then
-            renderer.text(center[1], screen[2] / 3 - 10, 255, 255, 255, velocity_alpha, "dc", 0, "- velocity -")
-            renderer.gradient(screen[1]/2 - (50 *velocity_amount), screen[2] / 3, 1 + 50*velocity_amount, 2, r, g, b, velocity_alpha/3, r, g, b, velocity_alpha, true)
-            renderer.gradient(screen[1]/2, screen[2] / 3, 50*velocity_amount, 2, r, g, b, velocity_alpha, r, g, b, velocity_alpha/3, true)
-        elseif lua_menu.misc.velocity_style:get() == "Modern" then
-            local box_width, box_height = 195, 40
-            local box_x, box_y = center[1] - box_width / 2, screen[2] / 3 - 20
-            local bar_width = 130
-
-            renderer.rounded_rectangle(box_x, box_y, box_width, box_height, 15, 15, 15, velocity_alpha * 0.8, 5)
-            renderer.text(center[1] - 18, screen[2] / 3 - 6, 200, 200, 200, velocity_alpha, "c", 0, "slowed down")
-            renderer.text(center[1] + 84, screen[2] / 3 - 12, 200, 200, 200, velocity_alpha, "r", 0, math.floor(velocity_amount * 100) .. "%")
-            renderer.rectangle(box_x + 50, box_y + 25, bar_width, 4, 50, 50, 50, velocity_alpha)
-            renderer.rectangle(box_x + 50, box_y + 25, bar_width * velocity_amount, 4, r, g, b, velocity_alpha)
-
-            renderer.texture(svg_data, center[1] - 88, screen[2] / 3 - 11, 22, 22, 255, 255, 255, velocity_alpha, "f")
+    
+    -- Применяем resolver ко всем игрокам
+    for i = 1, #players do
+        local player_index = players[i]
+        if entity.is_alive(player_index) then
+            local target_name = entity.get_player_name(player_index)
             
-            renderer.rectangle(center[1] - 58, screen[2] / 3 - 20, 1, box_height, 51, 51, 51, velocity_alpha)
-        end
-    end 
-
-
-    ind.watermark = function()
-        lua_menu.misc.watermark_color:override(true)
-        local r, g, b, a = lua_menu.misc.watermark_color:get_color()
-        if lua_menu.misc.watermark:get() then
-            if lua_menu.misc.watermark_style:get() == "Default" then
-                text_fade_animation(x_ind/2, y_ind-10, -1, {r=r, g=g, b=b, a=255}, {r=150, g=150, b=150, a=255}, "FineBit", "cd-")
-            elseif lua_menu.misc.watermark_style:get() == "Modern" then 
-                text_fade_animation(x_ind/2, y_ind-20, -1, {r=r, g=g, b=b, a=255}, {r=150, g=150, b=150, a=255}, "FINEBIT", "cd-")
-                text_fade_animation(x_ind/2, y_ind-10, -1, {r=255, g=255, b=255, a=255}, {r=150, g=150, b=150, a=255}, "BUILD:" ..string.upper(build), "cd-")
-            elseif lua_menu.misc.watermark_style:get() == "Legacy" then
-                text_fade_animation(x_ind/2, y_ind-10, -1, {r=r, g=g, b=b, a=255}, {r=150, g=150, b=150, a=255}, "FineBit", "cdb")
-            elseif lua_menu.misc.watermark_style:get() == "Branded" then
-                text_fade_animation(x_ind/2, y_ind-10, -1, {r=r, g=g, b=b, a=255}, {r=150, g=150, b=150, a=255}, "F I N E B I T ", "cd")
-            end
-        end
-    end
-
-    ind.info_panel = function()
-        local lp = entity.get_local_player()
-        if lp == nil then return end
-        local condition = "GLOBAL"
-        if id == 1 then condition = "GLOBAL"
-        elseif id == 2 then condition = "STAND"
-        elseif id == 3 then condition = "WALK"
-        elseif id == 4 then condition = "RUN"
-        elseif id == 5 then condition = "AIR"
-        elseif id == 6 then condition = "AIR+"
-        elseif id == 7 then condition = "DUCK"
-        elseif id == 8 then condition = "DUCK+" end
-        local threat = client.current_threat()
-        local name = "nil"
-        local threat_desync = 0
-        local showed_name = steam_name
-        if threat then
-            name = entity.get_player_name(threat)
-            threat_desync = math.floor(entity.get_prop(threat, 'm_flPoseParameter', 11) * 120 - 60)
-        end
-        local r, g, b, a = lua_menu.misc.info_panel:get_color()
-        showed_name = showed_name:sub(1, 64)
-        name = name:sub(1, 64)
-
-        local desync_amount = math.floor(entity.get_prop(lp, 'm_flPoseParameter', 11) * 120 - 60)
-        text_fade_animation(20, center[2], -1, {r=r, g=g, b=b, a=a}, {r=255, g=255, b=255, a=255}, "FineBit ~ Source", "d")
-        local textsize = renderer.measure_text("cd", "FineBit ~ Source")
-        renderer.gradient(20, center[2] + 15, textsize/2, 2, r, g, b, 50, r, g, b, a, true)
-        renderer.gradient(20 + textsize/2,center[2] + 15, textsize/2, 2, r, g, b, a, r, g, b, 50, true)
-        renderer.text(20, center[2] + 20, 255, 255, 255, 255, "-d", 0, "USER:"..string.upper(showed_name))
-        renderer.text(20, center[2] + 30, 255, 255, 255, 255, "-d", 0, "STATE:" ..string.upper(condition.. " "..math.abs(desync_amount).."°"))
-        renderer.text(20, center[2] + 40, 255, 255, 255, 255, "-d", 0, "TARGET:"..string.upper(name).." "..math.abs(threat_desync).."°")
-        if lua_menu.misc.predict:get() then
-            renderer.text(20, center[2] + 50, 255, 255, 255, 255, "-d", 0, "PREDICT MODE:"..string.upper(lua_menu.misc.predict_type:get()))
-        end 
-        if lua_menu.misc.predict:get() then 
-            renderer.gradient(20, center[2] + 65, textsize/2, 2, r, g, b, 50, r, g, b, a, true)
-            renderer.gradient(20 + textsize/2,center[2] + 65, textsize/2, 2, r, g, b, a, r, g, b, 50, true)
-        end
-    end
-end
-
-
-local tag = { } do
-    local ws_clantag = {
-        " ",
-        "F",
-        "Fi",
-        "Fin",
-        "Fine",
-        "Fine",
-        "FineB",
-        "FineBi",
-        "FineBit",
-        "FineBit",
-        "FineBit",
-        "FineBi",
-        "FineB",
-        "Fine",
-        "Fine",
-        "Fin",
-        "Fi",
-        "F",
-        " ",
-    }
-
-    local iter = 1
-    local wstime = 0
-    local function rotate_string()
-        local ret_str = ws_clantag[iter]
-        if iter < 19 then
-            iter = iter + 1
-        else
-            iter = 1
-        end
-        return ret_str
-    end
-
-    local function clantag_en()
-        ui.set(ref.clantag, false)
-        if wstime + 0.3 < globals.curtime() then
-            client.set_clan_tag(rotate_string())
-            wstime = globals.curtime()
-        elseif wstime > globals.curtime() then
-            wstime = globals.curtime()
-        end
-    end
-end
-
-    local function thirdperson(value)
-        if value ~= nil then
-            cvar.cam_idealdist:set_int(value)
-        end
-    end
-
-    local function aspectratio(value)
-        if value then
-            cvar.r_aspectratio:set_float(value)
-        end
-    end 
-
-    local native_GetClientEntity = vtable_bind('client.dll', 'VClientEntityList003', 3, 'void*(__thiscall*)(void*, int)')
-
-    math.clamp = function (x, a, b)
-        if a > x then return a
-        elseif b < x then return b
-        else return x end
-    end
-
-    local expres = {}
-
-    expres.get_prev_simtime = function(ent)
-        local ent_ptr = native_GetClientEntity(ent)    
-        if ent_ptr ~= nil then 
-            return ffi.cast('float*', ffi.cast('uintptr_t', ent_ptr) + 0x26C)[0] 
-        end
-    end
-
-    expres.restore = function()
-        for i = 1, 64 do
-            plist.set(i, "Force body yaw", false)
-        end
-    end
-
-    local phrases = {
-        "Твой скилл — как NFT: все знают, что он бесполезен", --Мне не нравится
-        "Ты — живая реклама антидепрессантов",
-        "Ты настолько плох что, Valve добавит тебя как босса в Left 4 Dead 3",
-        "Твой к/д — как курс рубля: только падает",
-        "Твой ПК гремит громче, чем твои пустые угрозы",
-        "Твой к/д — как моя мотивация жить: ниже нуля",
-        "Где тебя рожали? В патче 7.38",
-        "Твой скилл — как мемы 2007 - мертвы и позорны"
-        -- ".1",
-        -- "1",
-        -- "1."
-    }
-
-    local userid_to_entindex, get_local_player, is_enemy, console_cmd = client.userid_to_entindex, entity.get_local_player, entity.is_enemy, client.exec
-
-    local function on_player_death(e)
-        if not lua_menu.misc.spammers:get("TrashTalk") then return end
-
-        local victim_userid, attacker_userid = e.userid, e.attacker
-        if victim_userid == nil or attacker_userid == nil then
-            return
-        end
-
-        local victim_entindex = userid_to_entindex(victim_userid)
-        local attacker_entindex = userid_to_entindex(attacker_userid)
-
-        if attacker_entindex == get_local_player() and is_enemy(victim_entindex) then
-            client.delay_call(0, function() console_cmd("say ", phrases[math.random(1, #phrases)]) end)
-        end
-    end
-    client.set_event_callback("player_death", on_player_death)
-
-    if lua_menu.misc.predict_type:get() and lua_menu.misc.predict:get() then
-        math.clamp = function(value, min, max)
-            return value < min and min or (value > max and max or value)
-        end
-        
-        local start_interp_value = 0.015625
-        local end_interp_value = 0.031000
-        local interpolation_duration = 0.5
-        
-        local is_interpolating = false
-        local interpolation_start_time = 0
-        
-        local function interp_smooth()
-            if not is_interpolating then return end
-        
-            local current_time = globals.realtime()
-            local progress = (current_time - interpolation_start_time) / interpolation_duration
-            progress = math.clamp(progress, 0, 1)
-        
-            local current_interp_value = start_interp_value + (end_interp_value - start_interp_value) * progress
-            cvar.cl_interp:set_float(current_interp_value)
-        
-            if progress >= 1 then
-                is_interpolating = false
-            end
-        end
-        
-        local function is_vulnerable()
-            for _, v in ipairs(entity.get_players(true)) do
-                local flags = (entity.get_esp_data(v)).flags
-                if bit.band(flags, bit.lshift(1, 11)) ~= 0 then
-                    return true
-                end
-            end
-            return false
-        end
-        
-        client.set_event_callback("paint", function()
-            if lua_menu.misc.predict_type:get() == "New Method" then
-                if is_vulnerable() then
-                    if not is_interpolating then
-                        is_interpolating = true
-                        interpolation_start_time = globals.realtime()
-                    end
-                    interp_smooth()
-                else
-                    is_interpolating = false
-                    cvar.cl_interp:set_float(0.015625)
-                end
-            end
-        end)
-        
-        local function interpolate()
-            if lua_menu.misc.predict_type:get() == "New Method" then
-                cvar.cl_interpolate:set_int(0)
-            else
-                cvar.cl_interpolate:set_int(1)
-            end
-        end
-        
-        local function impprediction()
-            if lua_menu.misc.predict_type:get() == "New Method" then
-                cvar.cl_interp_ratio:set_int(0)
-                cvar.cl_interp:set_int(0)
-                cvar.cl_updaterate:set_int(62)
-            else
-                cvar.cl_interp_ratio:set_int(1)
-                cvar.cl_interp:set_float(0.015625)
-                cvar.cl_updaterate:set_int(64)
-            end
-        end
-        
-        client.set_event_callback("setup_command", function(cmd)
-            interpolate()
-            impprediction()
-        end)
-        if lua_menu.misc.predict_type:get() == "Off" then
-            cvar.cl_interpolate:set_int(1)
-            cvar.cl_interp_ratio:set_int(1)
-            cvar.cl_interp:set_float(0.015625)
-            cvar.cl_updaterate:set_int(64)
-        end
-    else
-        cvar.cl_interpolate:set_int(1)
-        cvar.cl_interp_ratio:set_int(1)
-        cvar.cl_interp:set_float(0.015625)
-        cvar.cl_updaterate:set_int(64)
-
-    end
-
-
-    client.set_event_callback(
-        "paint",
-        function()
-            if not lua_menu.misc.predictind:get() or not lua_menu.misc.predict:get() or lua_menu.misc.predict_type:get() == "Off" then return end
-                renderer.indicator(
-                    215, 211, 213, 132, "\aFFFFFFFF⛄\a0039A6FF Predict\aD52B1EFF Enemy"
-                )
-            end
-        
-    ) 
-
-local function auto_tp(cmd)
-    if lua_menu.misc.auto_tp_key:get() then
-        local lp = entity.get_local_player()
-        if lp == nil then return end
-        local flags = entity.get_prop(lp, 'm_fFlags')
-        local jumpcheck = bit.band(flags, 1) == 0
-        if is_vulnerable() and jumpcheck then
-            cmd.force_defensive = true
-            cmd.discharge_pending = true
-        end
-    else return end
-end
-
-local m_abs = math.abs
-local m_floor = math.floor
-local m_ceil = math.ceil
-local m_sqrt = math.sqrt
-local m_min = math.min
-local m_max = math.max
-local cfg = {
-    MISS_DB_SAMPLE_CAP = 100,
-    MISS_DB_CONFLICT_RADIUS = 35,
-    MISS_DB_HIT_DECAY_ON_MISS = 0.5,
-    MISS_DB_MISS_DECAY_ON_HIT = 0.5,
-    MISS_DB_MIN_SAMPLES = 2,
-    MISS_DB_NEIGHBOR_RADIUS = 25,
-    MISS_DB_EV_PRIOR = 0.5,
-    MISS_DB_SOFT_DECAY = 0.95,
-    HISTORY_SIZE = 12,
-    ANGLE_MEMORY_MIN_SAMPLES = 2,
-    ANGLE_MEMORY_MIN_RATE = 1.0,
-    ANGLE_MEMORY_MISS_DECAY_ON_HIT = 0.5,
-    ANGLE_MEMORY_HIT_DECAY_ON_MISS = 0.5,
-    ANGLE_MEMORY_CAP = 10,
-    BRAIN_DECAY = 0.9,
-    BRAIN_HIT_WEIGHT = 2.0,
-    BRAIN_MISS_WEIGHT = 1.0,
-    BRAIN_MIN_SAMPLES = 3,
-    BRAIN_MIN_CONFIDENCE = 0.3,
-    MISS_DB_EV_WEIGHT = 1.5,
-    POSE_WEIGHT = 2.0,
-    LBY_WEIGHT = 1.0,
-    ANIM_WEIGHT = 1.5,
-    MISS_FLIP_WEIGHT = 2.0,
-    ACTIVE_MEMORY_TICKS = 150,
-}
-
---region resolver
-local correction do 
-
-    local function clamp(value, min_value, max_value)
-        if value == nil then return min_value end
-        if value < min_value then return min_value end
-        if value > max_value then return max_value end
-        return value
-    end
-
-
-    local function sign(value)
-        if value == nil or value == 0 then return 0 end
-        return value > 0 and 1 or -1
-    end
-
-    local function round_yaw(yaw)
-        yaw = antiaim_func.normalize_angle(yaw)
-        if yaw >= 0 then
-            return m_floor(yaw + 0.5)
-        end
-
-        return m_ceil(yaw - 0.5)
-    end
-
-    local function safe_field(obj, ...)
-        if obj == nil then return nil end
-
-        for i = 1, select("#", ...) do
-            local key = select(i, ...)
-            local ok, value = pcall(function()
-                return obj[key]
-            end)
-
-            if ok and value ~= nil then
-                return value
-            end
-        end
-
-        return nil
-    end
-
-    local function get_identity(ent)
-        local steam64 = entity.get_steam64(ent)
-        if steam64 ~= nil then
-            return tostring(steam64)
-        end
-
-        return tostring(entity.get_player_name(ent) or "unknown") .. ":" .. tostring(ent)
-    end
-    local miss_db = {
-        global = { bins = {}, hit_bins = {}, total = 0, hit_total = 0 },
-        by_target = {},
-        last_decay_tick = 0,
-    }
-
-    local function get_db_node(root, key)
-        if key == nil then key = "unknown" end
-
-        if root[key] == nil then
-            root[key] = { bins = {}, hit_bins = {}, total = 0, hit_total = 0 }
-        end
-
-        return root[key]
-    end
-
-    local function get_bin(yaw)
-        return round_yaw(yaw)
-    end
-
-    local function db_cap(node, bins_name, total_name)
-        local total = node[total_name] or 0
-        if total <= cfg.MISS_DB_SAMPLE_CAP then return end
-
-        local scale = cfg.MISS_DB_SAMPLE_CAP / total
-        local new_total = 0
-        local bins = node[bins_name]
-
-        for key, value in pairs(bins) do
-            local scaled = value * scale
-            if scaled < 0.001 then
-                bins[key] = nil
-            else
-                bins[key] = scaled
-                new_total = new_total + scaled
-            end
-        end
-
-        node[total_name] = new_total
-    end
-
-    local function db_recount(node, bins_name, total_name)
-        local total = 0
-        local bins = node[bins_name]
-
-        for key, value in pairs(bins) do
-            if value < 0.001 then
-                bins[key] = nil
-            else
-                total = total + value
-            end
-        end
-
-        node[total_name] = total
-    end
-
-    local function db_decay_conflict(node, bins_name, total_name, center_bin, decay)
-        if node == nil then return end
-
-        local bins = node[bins_name]
-        if bins == nil then return end
-
-        local radius = cfg.MISS_DB_CONFLICT_RADIUS or 0
-        decay = decay or 1
-
-        for offset = -radius, radius do
-            local lookup_bin = get_bin(center_bin + offset)
-            local value = bins[lookup_bin]
-            if value ~= nil then
-                bins[lookup_bin] = value * decay
-            end
-        end
-
-        db_recount(node, bins_name, total_name)
-    end
-
-    local function db_add_miss(node, yaw, weight)
-        if node == nil then return end
-
-        local bin = get_bin(yaw)
-        weight = weight or 1
-        db_decay_conflict(node, "hit_bins", "hit_total", bin, cfg.MISS_DB_HIT_DECAY_ON_MISS)
-        node.bins[bin] = (node.bins[bin] or 0) + weight
-        node.total = (node.total or 0) + weight
-        db_cap(node, "bins", "total")
-    end
-
-    local function db_add_hit(node, yaw, weight)
-        if node == nil then return end
-
-        local bin = get_bin(yaw)
-        weight = weight or 1
-        db_decay_conflict(node, "bins", "total", bin, cfg.MISS_DB_MISS_DECAY_ON_HIT)
-        node.hit_bins[bin] = (node.hit_bins[bin] or 0) + weight
-        node.hit_total = (node.hit_total or 0) + weight
-        db_cap(node, "hit_bins", "hit_total")
-    end
-
-    local function db_get_ev(node, yaw)
-        if node == nil then return 0.5 end
-
-        local samples = (node.total or 0) + (node.hit_total or 0)
-        if samples < cfg.MISS_DB_MIN_SAMPLES then
-            return 0.5
-        end
-
-        local center = get_bin(yaw)
-        local radius = cfg.MISS_DB_NEIGHBOR_RADIUS
-        local hits, misses = 0, 0
-
-        for offset = -radius, radius do
-            local factor = 1 / (1 + m_abs(offset))
-            local lookup_bin = get_bin(center + offset)
-            hits = hits + ((node.hit_bins[lookup_bin] or 0) * factor)
-            misses = misses + ((node.bins[lookup_bin] or 0) * factor)
-        end
-
-        local prior = cfg.MISS_DB_EV_PRIOR
-        return (hits + prior) / (hits + misses + prior * 2)
-    end
-
-    local function db_expected_value(identity, yaw)
-        local global_ev = db_get_ev(miss_db.global, yaw)
-        local target_node = identity and miss_db.by_target[identity] or nil
-
-        if target_node == nil then
-            return global_ev
-        end
-
-        local target_samples = (target_node.total or 0) + (target_node.hit_total or 0)
-        if target_samples < cfg.MISS_DB_MIN_SAMPLES then
-            return global_ev
-        end
-
-        local target_ev = db_get_ev(target_node, yaw)
-        return global_ev * 0.28 + target_ev * 0.72
-    end
-
-    local function db_decay(cur_tick)
-        if (cur_tick - (miss_db.last_decay_tick or 0)) < 64 then return end
-        miss_db.last_decay_tick = cur_tick
-
-        local decay = cfg.MISS_DB_SOFT_DECAY
-        local function decay_node(node)
-            if node == nil then return end
-
-            local miss_total = 0
-            for key, value in pairs(node.bins) do
-                local new_value = value * decay
-                if new_value < 0.001 then
-                    node.bins[key] = nil
-                else
-                    node.bins[key] = new_value
-                    miss_total = miss_total + new_value
-                end
-            end
-            node.total = miss_total
-
-            local hit_total = 0
-            for key, value in pairs(node.hit_bins) do
-                local new_value = value * decay
-                if new_value < 0.001 then
-                    node.hit_bins[key] = nil
-                else
-                    node.hit_bins[key] = new_value
-                    hit_total = hit_total + new_value
-                end
-            end
-            node.hit_total = hit_total
-        end
-
-        decay_node(miss_db.global)
-        for _, node in pairs(miss_db.by_target) do
-            decay_node(node)
-        end
-    end
-
-    local runtime = {
-        players = {},
-        shots = {},
-        logs = {},
-        applied = {},
-    }
-
-    local function new_brain()
-        return {
-            left = 0,
-            right = 0,
-            samples = 0,
-        }
-    end
-
-    local function new_angle_memory()
-        return {
-            list = {},
-            bins = {},
-            best_yaw = nil,
-            best_rate = 0,
-            best_samples = 0,
-        }
-    end
-
-    local function new_player_state(ent, identity)
-        return {
-            records = {},
-            records_by_tick = {},
-            last_sim_tick = -1,
-            last_candidate = 0,
-            last_score = 0,
-            last_ev = 0.5,
-            last_reason = "none",
-            last_confidence = 0,
-            last_side = 0,
-            last_hit_yaw = nil,
-            last_miss_yaw = nil,
-            last_miss_tick = 0,
-            last_miss_reason = nil,
-            last_miss_hitgroup = nil,
-            last_anim_update_time = nil,
-            approach_abs_yaw = nil,
-            miss_streak = 0,
-            hit_streak = 0,
-            identity = identity or get_identity(ent),
-            brain = new_brain(),
-            angle_memory = new_angle_memory(),
-        }
-    end
-
-    local function reset_player_runtime(state, identity)
-        state.records = {}
-        state.records_by_tick = {}
-        state.last_sim_tick = -1
-        state.last_candidate = 0
-        state.last_score = 0
-        state.last_ev = 0.5
-        state.last_reason = "none"
-        state.last_confidence = 0
-        state.last_side = 0
-        state.last_hit_yaw = nil
-        state.last_miss_yaw = nil
-        state.last_miss_tick = 0
-        state.last_miss_reason = nil
-        state.last_miss_hitgroup = nil
-        state.last_anim_update_time = nil
-        state.approach_abs_yaw = nil
-        state.miss_streak = 0
-        state.hit_streak = 0
-        state.identity = identity
-        state.brain = new_brain()
-        state.angle_memory = new_angle_memory()
-    end
-
-    local function get_player_state(ent)
-        local identity = get_identity(ent)
-
-        if runtime.players[ent] == nil then
-            runtime.players[ent] = new_player_state(ent, identity)
-        elseif runtime.players[ent].identity ~= identity then
-            reset_player_runtime(runtime.players[ent], identity)
-        end
-
-        return runtime.players[ent]
-    end
-
-    local function push_log(text)
-        runtime.logs[#runtime.logs + 1] = string.format("[%d] %s", globals.tickcount(), text)
-        while #runtime.logs > 7 do
-            table.remove(runtime.logs, 1)
-        end
-    end
-
-    local function set_player_correction(ent, active, yaw)
-        if active then
-            plist.set(ent, "Correction active", true)
-            plist.set(ent, "Force body yaw", true)
-            plist.set(ent, "Force body yaw value", yaw and antiaim_func.normalize_angle(yaw) or 0)
-            -- print(antiaim_func.normalize_angle(yaw) or 0)
-            runtime.applied[ent] = true
-        elseif runtime.applied[ent] then
-            plist.set(ent, "Force body yaw", false)
-            plist.set(ent, "Correction active", false)
-            runtime.applied[ent] = nil
-        end
-    end
-
-    local function reset_all_corrections()
-        local pending = {}
-        for ent in pairs(runtime.applied) do
-            pending[#pending + 1] = ent
-        end
-
-        for i = 1, #pending do
-            set_player_correction(pending[i], false, 0)
-        end
-    end
-
-    local function apply_simtime_base(state, record)
-        local previous = state.records_by_tick[record.old_sim_tick]
-
-        if previous == nil and state.records[1] ~= nil and state.records[1].sim_tick ~= record.sim_tick then
-            previous = state.records[1]
-        end
-
-        if previous == nil or previous.eye_yaw == nil then
-            record.simtime_checked = false
-            record.simtime_base_yaw = nil
-            record.simtime_fake_abs = nil
-            return
-        end
-
-        local max_desync = record.max_desync or 0
-        local eye_yaw = record.eye_yaw or 0
-        local fake_abs = antiaim_func.normalize_angle(eye_yaw + max_desync)
-        local fake_delta = max_desync
-
-        if m_abs(antiaim_func.angle_diff(fake_abs, previous.eye_yaw)) > max_desync then
-            fake_abs = antiaim_func.normalize_angle(eye_yaw - max_desync)
-            fake_delta = -max_desync
-        end
-
-        record.simtime_checked = true
-        record.simtime_base_yaw = antiaim_func.normalize_angle(fake_delta)
-        record.simtime_fake_abs = fake_abs
-        record.simtime_reference_eye = previous.eye_yaw
-    end
-
-    local function apply_approach_base(state, record, anim_state)
-        local max_desync = record.max_desync or 0
-        local eye_yaw = record.eye_yaw or 0
-        local target_abs = record.simtime_fake_abs
-
-        if target_abs == nil then
-            local side = state.last_side
-            if side == 0 then side = sign(record.lby_delta) end
-            if side == 0 then side = sign(record.goal_feet_delta) end
-            if side == 0 then side = 1 end
-            target_abs = antiaim_func.normalize_angle(eye_yaw + side * max_desync)
-        end
-
-        local update_time = safe_field(anim_state, "last_client_side_animation_update_time", "m_flLastClientSideAnimationUpdateTime") or globals.curtime()
-        local previous_update_time = state.last_anim_update_time
-        state.last_anim_update_time = update_time
-
-        local dt = previous_update_time and (update_time - previous_update_time) or globals.tickinterval()
-        if dt <= 0 or dt > globals.tickinterval() * 16 then
-            dt = globals.tickinterval()
-        end
-
-        local stop_to_run = safe_field(anim_state, "stop_to_full_running_fraction", "m_flStopToFullRunningFraction") or 0
-        local rate = record.speed2d > 0.1 and (((stop_to_run * 20) + 30) * dt) or (100 * dt)
-        local start_abs = state.approach_abs_yaw or eye_yaw
-        local approached_abs = antiaim_func.approach_angle(target_abs, start_abs, rate)
-
-        state.approach_abs_yaw = antiaim_func.normalize_angle(approached_abs)
-        record.approach_base_yaw = antiaim_func.normalize_angle(antiaim_func.angle_diff(state.approach_abs_yaw, eye_yaw))
-        record.approach_rate = rate
-    end
-
-    local function build_record(ent, state)
-        local sim_time = entity.get_prop(ent, "m_flSimulationTime")
-        if sim_time == nil then return nil end
-
-        local ent_obj = c_entity.new(ent)
-        local anim_state = ent_obj:get_anim_state()
-        local layer3 = ent_obj:get_anim_overlay(3)
-        local layer6 = ent_obj:get_anim_overlay(6)
-
-        local old_sim_time = entity.get_prop(ent, "m_flOldSimulationTime")
-        if old_sim_time == nil and state.records[1] ~= nil then
-            old_sim_time = state.records[1].simulation_time
-        end
-
-        local sim_tick = toticks(sim_time)
-        local old_sim_tick = old_sim_time and toticks(old_sim_time) or sim_tick
-        local sim_delta_ticks = clamp(sim_tick - old_sim_tick, 1, 16)
-
-        local vx, vy, vz = entity.get_prop(ent, "m_vecVelocity")
-        vx, vy, vz = vx or 0, vy or 0, vz or 0
-
-        local ox, oy, oz = entity.get_origin(ent)
-        ox, oy, oz = ox or 0, oy or 0, oz or 0
-
-        local eye_yaw = select(2, entity.get_prop(ent, "m_angEyeAngles"))
-        local lby = antiaim_func.normalize_angle(entity.get_prop(ent, "m_flLowerBodyYawTarget"))
-        local goal_feet_yaw = antiaim_func.normalize_angle(safe_field(anim_state, "goal_feet_yaw", "m_flGoalFeetYaw"))
-        local current_feet_yaw = antiaim_func.normalize_angle(safe_field(anim_state, "current_feet_yaw", "m_flCurrentFeetYaw"))
-        local max_desync = m_abs(antiaim_func.get_desync(anim_state) or 0)
-        local pose = entity.get_prop(ent, "m_flPoseParameter", 11)
-        pose = pose and (pose * 120 - 60) or nil
-
-        local record = {
-            ent = ent,
-            identity = state.identity,
-            simulation_time = sim_time,
-            sim_tick = sim_tick,
-            old_sim_tick = old_sim_tick,
-            choked = clamp(sim_delta_ticks - 1, 0, 16),
-            eye_yaw = eye_yaw,
-            lby = lby,
-            lby_delta = antiaim_func.angle_diff(lby, eye_yaw),
-            goal_feet_yaw = goal_feet_yaw,
-            current_feet_yaw = current_feet_yaw,
-            goal_feet_delta = antiaim_func.angle_diff(goal_feet_yaw, eye_yaw),
-            current_feet_delta = antiaim_func.angle_diff(current_feet_yaw, eye_yaw),
-            pose_yaw = pose,
-            max_desync = max_desync,
-            velocity_x = vx,
-            velocity_y = vy,
-            velocity_z = vz,
-            speed2d = vector(vx,vy):length2d(),
-            origin_x = ox,
-            origin_y = oy,
-            origin_z = oz,
-            layer3_weight = safe_field(layer3, "weight", "m_flWeight") or 0,
-            layer3_cycle = safe_field(layer3, "cycle", "m_flCycle") or 0,
-            layer3_playback = safe_field(layer3, "playback_rate", "m_playback_rate", "m_flPlaybackRate") or 0,
-            layer6_weight = safe_field(layer6, "weight", "m_flWeight") or 0,
-            layer6_cycle = safe_field(layer6, "cycle", "m_flCycle") or 0,
-            layer6_playback = safe_field(layer6, "playback_rate", "m_playback_rate", "m_flPlaybackRate") or 0,
-        }
-
-        apply_simtime_base(state, record)
-        apply_approach_base(state, record, anim_state)
-        return record
-    end
-
-    local function store_record(state, record)
-        if record == nil then return end
-
-        if state.last_sim_tick ~= record.sim_tick then
-            table.insert(state.records, 1, record)
-            state.records_by_tick[record.sim_tick] = record
-            state.last_sim_tick = record.sim_tick
-
-            while #state.records > cfg.HISTORY_SIZE do
-                local removed = table.remove(state.records)
-                if removed ~= nil then
-                    state.records_by_tick[removed.sim_tick] = nil
-                end
-            end
-        else
-            state.records[1] = record
-            state.records_by_tick[record.sim_tick] = record
-        end
-    end
-
-    local function add_candidate(candidates, value, reason, weight, max_desync, apply_yaw)
-        value = value ~= nil and antiaim_func.normalize_angle(value) or nil
-        if value == nil then return end
-
-        local key = get_bin(value)
-        local existing = candidates[key]
-
-        if existing == nil or (weight or 0) > existing.weight then
-            candidates[key] = {
-                value = value,
-                apply_yaw = apply_yaw ~= nil and antiaim_func.normalize_angle(apply_yaw) or value,
-                reason = reason or "candidate",
-                weight = weight or 0,
-            }
-        end
-    end
-
-    local function angle_memory_refresh(memory)
-        if memory == nil then return nil, 0, 0 end
-
-        local best_yaw, best_rate, best_samples = nil, 0, 0
-        local best_score = -1
-
-        for _, node in pairs(memory.bins) do
-            local hits = node.hits or 0
-            local misses = node.misses or 0
-            local samples = hits + misses
-
-            if samples >= cfg.ANGLE_MEMORY_MIN_SAMPLES then
-                local rate = (hits + 0.5) / (samples + 1)
-                local score = rate + m_min(samples, 8) * 0.015
-
-                if rate >= cfg.ANGLE_MEMORY_MIN_RATE and score > best_score then
-                    best_yaw = node.yaw
-                    best_rate = rate
-                    best_samples = samples
-                    best_score = score
-                end
-            end
-        end
-
-        memory.best_yaw = best_yaw
-        memory.best_rate = best_rate
-        memory.best_samples = best_samples
-
-        return best_yaw, best_rate, best_samples
-    end
-
-    local function angle_memory_add(state, yaw, hit, weight)
-        if state == nil or yaw == nil then return end
-
-        weight = weight or 1
-        if weight <= 0 then return end
-
-        local memory = state.angle_memory
-        if memory == nil then
-            memory = new_angle_memory()
-            state.angle_memory = memory
-        end
-
-        yaw = antiaim_func.normalize_angle(yaw)
-        local bin = get_bin(yaw)
-        local node = memory.bins[bin]
-
-        if node == nil then
-            node = { yaw = yaw, hits = 0, misses = 0 }
-            memory.bins[bin] = node
-        else
-            node.yaw = antiaim_func.normalize_angle(node.yaw + antiaim_func.angle_diff(yaw, node.yaw) / 3)
-        end
-
-        if hit then
-            node.misses = (node.misses or 0) * cfg.ANGLE_MEMORY_MISS_DECAY_ON_HIT
-            node.hits = (node.hits or 0) + weight
-        else
-            node.hits = (node.hits or 0) * cfg.ANGLE_MEMORY_HIT_DECAY_ON_MISS
-            node.misses = (node.misses or 0) + weight
-        end
-
-        table.insert(memory.list, 1, { bin = bin, hit = hit and true or false, weight = weight })
-
-        while #memory.list > cfg.ANGLE_MEMORY_CAP do
-            local removed = table.remove(memory.list)
-            local old = removed and memory.bins[removed.bin] or nil
-            if old ~= nil then
-                local old_weight = removed.weight or 1
-                if removed.hit then
-                    old.hits = m_max((old.hits or 0) - old_weight, 0)
-                else
-                    old.misses = m_max((old.misses or 0) - old_weight, 0)
-                end
-
-                if (old.hits or 0) + (old.misses or 0) <= 0 then
-                    memory.bins[removed.bin] = nil
-                end
-            end
-        end
-
-        angle_memory_refresh(memory)
-    end
-
-    local function angle_memory_best(state)
-        local memory = state and state.angle_memory or nil
-        if memory == nil then return nil, 0, 0 end
-
-        return memory.best_yaw, memory.best_rate or 0, memory.best_samples or 0
-    end
-
-    local function brain_update(state, yaw, hit, weight)
-        if state == nil or yaw == nil then return end
-
-        weight = weight or 1
-        if weight <= 0 then return end
-
-        local side = sign(yaw)
-        if side == 0 then return end
-
-        local brain = state.brain
-        if brain == nil then
-            brain = new_brain()
-            state.brain = brain
-        end
-
-        brain.left = (brain.left or 0) * cfg.BRAIN_DECAY
-        brain.right = (brain.right or 0) * cfg.BRAIN_DECAY
-
-        local main = (hit and cfg.BRAIN_HIT_WEIGHT or -cfg.BRAIN_MISS_WEIGHT) * weight
-        local opposite = (hit and -(cfg.BRAIN_HIT_WEIGHT / 3) or (cfg.BRAIN_MISS_WEIGHT * (11 / 20))) * weight
-
-        if side > 0 then
-            brain.right = brain.right + main
-            brain.left = brain.left + opposite
-        else
-            brain.left = brain.left + main
-            brain.right = brain.right + opposite
-        end
-
-        brain.left = clamp(brain.left, -8, 8)
-        brain.right = clamp(brain.right, -8, 8)
-        brain.samples = m_min((brain.samples or 0) + weight, 64)
-    end
-
-    local function brain_get_side(state)
-        local brain = state and state.brain or nil
-        if brain == nil or (brain.samples or 0) < cfg.BRAIN_MIN_SAMPLES then
-            return 0, 0
-        end
-
-        local delta = (brain.right or 0) - (brain.left or 0)
-        local confidence = m_min(m_abs(delta) / 6, 1)
-        if confidence < cfg.BRAIN_MIN_CONFIDENCE then
-            return 0, confidence
-        end
-
-        return delta > 0 and 1 or -1, confidence
-    end
-
-    local function is_flat_delta(record)
-        return m_abs(record.pose_yaw or 0) < 4
-            and m_abs(record.lby_delta or 0) < 6
-            and m_abs(record.goal_feet_delta or 0) < 6
-            and m_abs(record.current_feet_delta or 0) < 6
-    end
-
-    local function get_playback_side(state, record)
-        local previous = state.records[1]
-        if previous == nil then return 0 end
-        if record.speed2d < 2 then return 0 end
-
-        local layer6_delta = record.layer6_playback - (previous.layer6_playback or 0)
-        local layer3_delta = record.layer3_playback - (previous.layer3_playback or 0)
-        local dominant_delta = m_abs(layer6_delta) >= m_abs(layer3_delta) and layer6_delta or layer3_delta
-        record.playback_delta = dominant_delta
-
-        if m_abs(dominant_delta) < 0.00001 then
-            return 0
-        end
-
-        local yaw_delta = antiaim_func.angle_diff(record.eye_yaw, previous.eye_yaw)
-        if yaw_delta == 0 then
-            yaw_delta = antiaim_func.angle_diff(record.goal_feet_yaw, previous.goal_feet_yaw)
-        end
-        if yaw_delta == 0 then
-            yaw_delta = record.goal_feet_delta
-        end
-        record.playback_yaw_delta = yaw_delta
-
-        return sign(dominant_delta) * (sign(yaw_delta) ~= 0 and sign(yaw_delta) or 1)
-    end
-
-    local function create_candidates(state, record)
-        local candidates = {}
-        local max_desync = record.max_desync or 0
-        local function add(value, reason, weight, apply_yaw)
-            add_candidate(candidates, value, reason, weight, max_desync, apply_yaw)
-        end
-
-        local playback_side = get_playback_side(state, record)
-        local brain_side, brain_confidence = brain_get_side(state)
-        local memory_yaw, memory_rate, memory_samples = angle_memory_best(state)
-        local pose_side = sign(record.pose_yaw)
-        local lby_side = sign(record.lby_delta)
-        local anim_side = sign(record.goal_feet_delta)
-        local base_side = playback_side ~= 0 and playback_side or sign(record.simtime_base_yaw)
-        if base_side == 0 then base_side = brain_side end
-        if base_side == 0 then base_side = pose_side end
-        if base_side == 0 then base_side = lby_side end
-        if base_side == 0 then base_side = anim_side end
-        if base_side == 0 then base_side = state.last_side end
-        if base_side == 0 then base_side = 1 end
-
-        record.flat_delta = is_flat_delta(record)
-        record.playback_side = playback_side
-        record.brain_side = brain_side
-        record.brain_confidence = brain_confidence
-        record.memory_yaw = memory_yaw
-        record.memory_rate = memory_rate
-        record.memory_samples = memory_samples
-        record.last_miss_yaw = state.last_miss_yaw
-
-        add(record.pose_yaw, "pose", record.flat_delta and 0.08 or 0.84)
-        add(record.lby_delta, "lby", record.flat_delta and 0.06 or (record.speed2d > 35 and 0.72 or 0.48))
-        add(record.goal_feet_delta, "goalfeet", record.flat_delta and 0.05 or 0.40)
-        add(record.current_feet_delta, "currentfeet", record.flat_delta and 0.04 or 0.30)
-        add(record.simtime_base_yaw, "simtime-base", record.simtime_checked and 1.18 or 0, record.simtime_fake_abs)
-        add(record.approach_base_yaw, "approach-save", record.simtime_checked and 0.46 or 0.66)
-
-        local memory_repeats_miss = state.miss_streak > 0
-            and state.last_miss_yaw ~= nil
-            and memory_yaw ~= nil
-            and m_abs(antiaim_func.angle_diff(memory_yaw, state.last_miss_yaw)) < 10
-
-        if memory_yaw ~= nil and not memory_repeats_miss then
-            local memory_weight = 0.60 + (memory_rate or 0) * 0.55 + m_min(memory_samples or 0, 4) * 0.03
-            if state.miss_streak > 0 then
-                memory_weight = memory_weight * 0.55
-            end
-            add(memory_yaw, "memory-best", memory_weight)
-        end
-
-        if brain_side ~= 0 then
-            add(brain_side * max_desync, "brain-side", 0.82 + (brain_confidence or 0) * 0.32)
-        end
-
-        if playback_side ~= 0 then
-            add(playback_side * max_desync, "playback-side", 1.02)
-        end
-
-        add(base_side * max_desync, "max-side", record.flat_delta and 0.86 or 0.38)
-        add(0, "center", record.flat_delta and 0.01 or 0.08)
-
-        if state.last_candidate ~= nil and state.last_candidate ~= 0 then
-            add(state.last_candidate, "last", state.hit_streak > 0 and 0.48 or 0.16)
-            add(-state.last_candidate, "last-flip", state.miss_streak > 0 and 0.48 or 0.18)
-        end
-
-        if state.last_hit_yaw ~= nil and state.miss_streak <= 0 then
-            add(state.last_hit_yaw, "last-hit", 0.54 + m_min(state.hit_streak, 3) * 0.08)
-        end
-
-        if state.miss_streak > 0 then
-            local last_miss_yaw = state.last_miss_yaw or state.last_candidate or 0
-            local miss_side = sign(last_miss_yaw)
-            if miss_side == 0 then
-                miss_side = base_side
-            end
-            add(-miss_side * max_desync, "miss-flip", 0.72 + m_min(state.miss_streak, 4) * 0.14)
-        end
-
-        return candidates
-    end
-
-    local function score_candidate(state, record, candidate)
-        local value = candidate.value
-        local score = candidate.weight or 0
-        local abs_value = m_abs(value)
-        local max_desync = record.max_desync or 0
-        local ev = db_expected_value(record.identity, value)
-
-        score = score + (ev - 0.5) * cfg.MISS_DB_EV_WEIGHT
-
-        if record.pose_yaw ~= nil and (not record.flat_delta or m_abs(record.pose_yaw) > 4) then
-            local diff = m_abs(antiaim_func.angle_diff(value, record.pose_yaw))
-            score = score + cfg.POSE_WEIGHT * clamp(1 - diff / 42, 0, 1)
-        end
-
-        if record.lby_delta ~= nil and (not record.flat_delta or m_abs(record.lby_delta) > 6) then
-            local diff = m_abs(antiaim_func.angle_diff(value, record.lby_delta))
-            score = score + cfg.LBY_WEIGHT * clamp(1 - diff / 55, 0, 1)
-        end
-
-        if record.goal_feet_delta ~= nil and (not record.flat_delta or m_abs(record.goal_feet_delta) > 6) then
-            local diff = m_abs(antiaim_func.angle_diff(value, record.goal_feet_delta))
-            score = score + cfg.ANIM_WEIGHT * clamp(1 - diff / 50, 0, 1)
-        end
-
-        if record.simtime_checked and record.simtime_base_yaw ~= nil then
-            local sim_diff = m_abs(antiaim_func.angle_diff(value, record.simtime_base_yaw))
-            score = score + 0.55 * clamp(1 - sim_diff / 40, 0, 1)
-        end
-
-        if record.approach_base_yaw ~= nil then
-            local approach_diff = m_abs(antiaim_func.angle_diff(value, record.approach_base_yaw))
-            score = score + 0.22 * clamp(1 - approach_diff / 35, 0, 1)
-        end
-
-        if record.playback_side ~= 0 and sign(value) == record.playback_side and m_abs(abs_value - max_desync) < 2 then
-            score = score + 0.34
-        end
-
-        if record.brain_side ~= 0 and sign(value) == record.brain_side and m_abs(abs_value - max_desync) < 2 then
-            score = score + 0.18 + (record.brain_confidence or 0) * 0.28
-        end
-
-        if record.memory_yaw ~= nil then
-            local memory_diff = m_abs(antiaim_func.angle_diff(value, record.memory_yaw))
-            score = score + 0.42 * (record.memory_rate or 0) * clamp(1 - memory_diff / 32, 0, 1)
-        end
-
-        if state.miss_streak > 0 then
-            local missed_yaw = state.last_miss_yaw or state.last_candidate
-            local missed_side = sign(missed_yaw)
-
-            if missed_yaw ~= nil then
-                local miss_power = m_min(state.miss_streak, 4)
-                local same_as_miss = m_abs(antiaim_func.angle_diff(value, missed_yaw)) < 10
-
-                if same_as_miss then
-                    score = score - cfg.MISS_FLIP_WEIGHT * miss_power
-                elseif missed_side ~= 0 and sign(value) ~= missed_side and abs_value > 12 then
-                    score = score + cfg.MISS_FLIP_WEIGHT * 0.82 * miss_power
-                end
-
-                if missed_side ~= 0 and sign(value) == missed_side and abs_value > max_desync - 3 then
-                    score = score - cfg.MISS_FLIP_WEIGHT * 0.42 * miss_power
-                end
-            end
-        end
-
-        if state.hit_streak > 0 and state.last_hit_yaw ~= nil then
-            local hit_diff = m_abs(antiaim_func.angle_diff(value, state.last_hit_yaw))
-            score = score + 0.22 * m_min(state.hit_streak, 3) * clamp(1 - hit_diff / 45, 0, 1)
-        end
-
-        return score, ev
-    end
-
-    local function candidate_repeats_miss(state, record, candidate)
-        if state == nil or record == nil or candidate == nil or state.last_miss_yaw == nil then
-            return false
-        end
-
-        local value = candidate.value
-        if value == nil then return false end
-
-        local missed_yaw = state.last_miss_yaw
-        if m_abs(antiaim_func.angle_diff(value, missed_yaw)) < 10 then
-            return true
-        end
-
-        local missed_side = sign(missed_yaw)
-        local value_side = sign(value)
-        local max_desync = record.max_desync or 0
-
-        return (state.miss_streak or 0) >= 2
-            and missed_side ~= 0
-            and value_side == missed_side
-            and m_abs(value) > max_desync - 4
-    end
-
-    local function get_candidate_by_reason(candidates, reason)
-        for _, candidate in pairs(candidates) do
-            if candidate.reason == reason then
-                return candidate
-            end
-        end
-
-        return nil
-    end
-
-    local function select_candidate(state, record)
-        local candidates = create_candidates(state, record)
-        local best, second = nil, nil
-
-        for _, candidate in pairs(candidates) do
-            local score, ev = score_candidate(state, record, candidate)
-            candidate.score = score
-            candidate.ev = ev
-
-            if best == nil or candidate.score > best.score then
-                second = best
-                best = candidate
-            elseif second == nil or candidate.score > second.score then
-                second = candidate
-            end
-        end
-
-        if best == nil then
-            best = { value = 0, score = 0, ev = 0.5, reason = "none" }
-        end
-
-        if (state.miss_streak or 0) >= 2 and candidate_repeats_miss(state, record, best) then
-            local flip = get_candidate_by_reason(candidates, "miss-flip")
-
-            if flip ~= nil and not candidate_repeats_miss(state, record, flip) then
-                local old_score = best.score or 0
-                second = best
-                best = flip
-                best.score = m_max(best.score or 0, old_score + 0.15 + m_min(state.miss_streak or 0, 4) * 0.08)
-                best.reason = "miss-flip-safe"
-            else
-                local missed_side = sign(state.last_miss_yaw)
-                if missed_side ~= 0 then
-                    local value = antiaim_func.normalize_angle(-missed_side * (record.max_desync or 0))
-                    if value ~= nil then
-                        second = best
-                        best = {
-                            value = value,
-                            apply_yaw = value,
-                            score = (best.score or 0) + 0.25 + m_min(state.miss_streak or 0, 4) * 0.10,
-                            ev = db_expected_value(record.identity, value),
-                            reason = "miss-panic-flip",
-                        }
-                    end
-                end
-            end
-        end
-
-        local confidence = second and clamp(best.score - second.score, 0, 2) / 2 or 0.5
-        return best, confidence
-    end
-
-    local function should_resolve(state, record)
-        if record == nil then return false end
-
-        if state.miss_streak > 0 then return true end
-        if client.current_threat() == record.ent then return true end
-        if record.choked > 0 then return true end
-        if record.speed2d < 180 then return true end
-        if m_abs(record.pose_yaw or 0) > 4 then return true end
-        if m_abs(record.lby_delta or 0) > 8 then return true end
-
-        return false
-    end
-
-    local function handle_player(ent)
-        if ent == nil or not entity.is_alive(ent) or entity.is_dormant(ent) then
-            set_player_correction(ent, false, 0)
-            return
-        end
-
-        local state = get_player_state(ent)
-        local record = build_record(ent, state)
-        if record == nil then
-            set_player_correction(ent, false, 0)
-            return
-        end
-
-        local candidate, confidence = select_candidate(state, record)
-        store_record(state, record)
-
-        local active = should_resolve(state, record)
-        if active then
-            set_player_correction(ent, true, candidate.apply_yaw or candidate.value)
-        else
-            set_player_correction(ent, false, 0)
-        end
-
-        state.last_candidate = candidate.value
-        state.last_score = candidate.score
-        state.last_ev = candidate.ev
-        state.last_reason = candidate.reason
-        state.last_confidence = confidence
-        state.last_side = sign(candidate.value) ~= 0 and sign(candidate.value) or state.last_side
-        state.last_record = record
-        state.last_update_tick = globals.tickcount()
-    end
-
-    local function on_net_update()
-        if not lua_menu.misc.resolver:get() then
-            reset_all_corrections()
-            return
-        end
-
-        local local_player = entity.get_local_player()
-        if local_player == nil or not entity.is_alive(local_player) then
-            reset_all_corrections()
-            return
-        end
-
-        client.update_player_list()
-        db_decay(globals.tickcount())
-
-        local seen = {}
-        local enemies = entity.get_players(true)
-        local target = client.current_threat()
-        for i = 1, #enemies do
-            local ent = enemies[i]
-            seen[ent] = true
-            if ent == target then
-                handle_player(ent)
-            end
-        end
-
-        local tick = globals.tickcount()
-        for ent, state in pairs(runtime.players) do
-            if not seen[ent] and (tick - (state.last_update_tick or 0)) > cfg.ACTIVE_MEMORY_TICKS then
-                set_player_correction(ent, false, 0)
-            end
-        end
-
-        for id, shot in pairs(runtime.shots) do
-            if tick - (shot.tick or tick) > 256 then
-                runtime.shots[id] = nil
-            end
-        end
-    end
-
-    local function add_result_to_db(identity, yaw, hit, weight)
-        local target_node = get_db_node(miss_db.by_target, identity)
-
-        if hit then
-            db_add_hit(miss_db.global, yaw, weight)
-            db_add_hit(target_node, yaw, weight)
-        else
-            db_add_miss(miss_db.global, yaw, weight)
-            db_add_miss(target_node, yaw, weight)
-        end
-    end
-
-    local function should_train_miss(reason)
-        reason = tostring(reason or "unknown")
-        local lower = string.lower(reason)
-
-        if lower == "spread" or lower == "death" then return false end
-        if string.find(lower, "damage", 1, true) ~= nil then return false end
-        if string.find(lower, "prediction", 1, true) ~= nil then return false end
-
-        return true
-    end
-
-    local hitgroup_names = {
-        [0] = "generic",
-        [1] = "head",
-        [2] = "chest",
-        [3] = "stomach",
-        [4] = "left arm",
-        [5] = "right arm",
-        [6] = "left leg",
-        [7] = "right leg",
-        [8] = "neck",
-    }
-
-    local function get_event_hitgroup(event)
-        if event == nil then return nil end
-
-        local hitgroup = event.hitgroup
-        if hitgroup == nil then
-            hitgroup = event.hit_group
-        end
-        if hitgroup == nil then
-            hitgroup = event.aim_hitgroup
-        end
-        if hitgroup == nil then
-            hitgroup = event.target_hitgroup
-        end
-
-        local numeric = hitgroup ~= nil and tonumber(hitgroup) or nil
-        if numeric ~= nil then
-            return numeric
-        end
-
-        if type(hitgroup) == "string" then
-            local lower = string.lower(hitgroup)
-            if lower == "head" then return 1 end
-            if lower == "chest" then return 2 end
-            if lower == "stomach" then return 3 end
-            if lower == "left arm" then return 4 end
-            if lower == "right arm" then return 5 end
-            if lower == "left leg" then return 6 end
-            if lower == "right leg" then return 7 end
-            if lower == "neck" then return 8 end
-        end
-
-        return nil
-    end
-
-    local function get_hitgroup_name(hitgroup)
-        if hitgroup == nil then return "unknown" end
-        return hitgroup_names[hitgroup] or tostring(hitgroup)
-    end
-
-    local function get_resolver_train_weight(hitgroup, hit)
-        if hitgroup == nil then
-            return hit and (1 / 5) or (7 / 20), true
-        end
-
-        if hitgroup == 1 or hitgroup == 8 then
-            return 1, true
-        end
-
-        if hitgroup == 3 then
-            return hit and 0.55 or 0.78, true
-        end
-
-        if hitgroup == 2 then
-            return hit and 0.45 or 0.68, true
-        end
-
-        if hitgroup == 6 or hitgroup == 7 then
-            return hit and (21 / 50) or (31 / 50), true
-        end
-
-        if hitgroup == 4 or hitgroup == 5 then
-            return hit and 0.18 or 0.32, true
-        end
-
-        return hit and 0.12 or 0.24, true
-    end
-
-    local function on_aim_fire(event)
-        if not lua_menu.misc.resolver:get() then return end
-        if event == nil or event.id == nil or event.target == nil then return end
-
-        local ent = event.target
-        local state = runtime.players[ent]
-        local record = state and state.last_record or nil
-
-        runtime.shots[event.id] = {
-            target = ent,
-            identity = state and state.identity or get_identity(ent),
-            yaw = state and state.last_candidate or 0,
-            reason = state and state.last_reason or "unknown",
-            hitgroup = get_event_hitgroup(event),
-            tick = globals.tickcount(),
-            speed2d = record and record.speed2d or 0,
-            choked = record and record.choked or 0,
-        }
-    end
-
-    local function on_aim_hit(event)
-        if event == nil or event.id == nil then return end
-
-        local shot = runtime.shots[event.id]
-        if shot == nil then return end
-
-        local hitgroup = get_event_hitgroup(event) or shot.hitgroup
-        local train_weight, reliable_hit = get_resolver_train_weight(hitgroup, true)
-        if reliable_hit then
-            add_result_to_db(shot.identity, shot.yaw, true, train_weight)
-        end
-
-        local state = runtime.players[shot.target]
-        if state ~= nil then
-            state.miss_streak = 0
-            state.last_miss_yaw = nil
-            state.last_miss_reason = nil
-            state.last_miss_hitgroup = nil
-
-            if reliable_hit then
-                angle_memory_add(state, shot.yaw, true, train_weight)
-                brain_update(state, shot.yaw, true, train_weight)
-
-                if train_weight >= 0.85 then
-                    state.hit_streak = m_min((state.hit_streak or 0) + 1, 8)
-                    state.last_hit_yaw = shot.yaw
-                else
-                    state.hit_streak = 0
-                    state.last_hit_yaw = nil
+            -- Применяем resolver только к вражеским игрокам
+            if entity.get_prop(player_index, "m_iTeamNum") ~= entity.get_prop(lp, "m_iTeamNum") then
+                plist.set(player_index, "Force body yaw", true)
+                plist.set(player_index, "Force body yaw value", body_yaw_newmethod_get_sda)
+                
+                if menu.misc.debug:get() then
+                    -- print("Applied resolver to:", target_name, "Body yaw:", body_yaw_newmethod_get_sda)
                 end
             else
-                state.hit_streak = 0
-                state.last_hit_yaw = nil
-            end
-        end
-
-        push_log(string.format(
-            "hit %s yaw %.1f %s via %s",
-            tostring(entity.get_player_name(shot.target) or shot.target),
-            shot.yaw,
-            get_hitgroup_name(hitgroup),
-            shot.reason
-        ))
-        runtime.shots[event.id] = nil
-    end
-
-    local function on_aim_miss(event)
-        if event == nil or event.id == nil then return end
-
-        local shot = runtime.shots[event.id]
-        if shot == nil then return end
-
-        local reason = tostring(event.reason or "unknown")
-        local hitgroup = get_event_hitgroup(event) or shot.hitgroup
-        local train_weight, reliable_miss = get_resolver_train_weight(hitgroup, false)
-
-        if should_train_miss(reason) and reliable_miss then
-            add_result_to_db(shot.identity, shot.yaw, false, train_weight)
-
-            local state = runtime.players[shot.target]
-            if state ~= nil then
-                state.miss_streak = m_min((state.miss_streak or 0) + train_weight, 8)
-                state.hit_streak = 0
-                state.last_hit_yaw = nil
-                state.last_miss_yaw = shot.yaw
-                state.last_miss_tick = globals.tickcount()
-                state.last_miss_reason = reason
-                state.last_miss_hitgroup = hitgroup
-                angle_memory_add(state, shot.yaw, false, train_weight)
-                brain_update(state, shot.yaw, false, train_weight)
-            end
-
-            push_log(string.format(
-                "miss %s yaw %.1f %s reason %s",
-                tostring(entity.get_player_name(shot.target) or shot.target),
-                shot.yaw,
-                get_hitgroup_name(hitgroup),
-                reason
-            ))
-        end
-
-        runtime.shots[event.id] = nil
-    end
-
-    local function on_round_reset()
-        reset_all_corrections()
-        runtime.shots = {}
-
-        for _, state in pairs(runtime.players) do
-            state.records = {}
-            state.records_by_tick = {}
-            state.last_sim_tick = -1
-            state.last_anim_update_time = nil
-            state.approach_abs_yaw = nil
-            state.miss_streak = 0
-            state.hit_streak = 0
-            state.last_hit_yaw = nil
-            state.last_miss_yaw = nil
-            state.last_miss_tick = 0
-            state.last_miss_reason = nil
-            state.last_miss_hitgroup = nil
-        end
-    end
-
-    lua_menu.misc.resolver:set_callback(function()
-        reset_all_corrections()
-        local en_st = lua_menu.misc.resolver:get()
-        local action = en_st and client.set_event_callback or client.unset_event_callback
-        action("net_update_end", on_net_update)
-        action("aim_fire", on_aim_fire)
-        action("aim_hit", on_aim_hit)
-        action("aim_miss", on_aim_miss)
-        action("round_start", on_round_reset)
-        action("cs_game_disconnected", on_round_reset)
-        action("shutdown", reset_all_corrections)
-    end)
-
-end
---region end
-
-
-local function fixhideshots()
-    if lua_menu.misc.fix_hideshots:get() then
-        if ui.get(ref.fakeduck) then 
-            ui.set(ref.fakelag[1], 14) 
-        else
-            if ui.get(ref.os[2], true) then
-                ui.set(ref.fakelag[1], 1)
-            else
-                ui.set(ref.fakelag[1], 14)
+                -- Сбрасываем настройки для своих
+                plist.set(player_index, "Force body yaw", false)
+                plist.set(player_index, "Force body yaw value", 0)
             end
         end
     end
 end
 
-local is_hittable = false
-local charge_state = false
-
-local function unsafecharge(cmd)
-    if lua_menu.misc.unsafe_charge:get() then
-        local lp = entity.get_local_player()
-        if not lp or not entity.is_alive(lp) then return end
-
-        local threat = client.current_threat()
-        local in_air = bit.band(entity.get_prop(lp, 'm_fFlags'), 1) == 0
-        
-        if threat then
-            is_hittable = bit.band(entity.get_esp_data(threat).flags, bit.lshift(1, 11)) == 2048
-        else
-            is_hittable = false
-        end
-
-        if is_hittable and not check_charge() and ui.get(ref.dt[1]) and ui.get(ref.dt[2]) and in_air then
-            ui.set(ref.aimbot, false)
-            charge_state = true
-        else
-            ui.set(ref.aimbot, true)
-            charge_state = false
-        end 
-    end
-end
-
-local function autobuy(e)
-    if not lua_menu.misc.autobuy:get() then return end
-    if client.userid_to_entindex(e.userid) ~= entity.get_local_player() then return end
-
-
-
-    local primary = lua_menu.misc.autobuy_primary:get()
-    local second = lua_menu.misc.autobuy_second:get()
-    local nades = lua_menu.misc.autobuy_nades:get()
-    local other = lua_menu.misc.autobuy_other:get()
-    local buy = ''
-
-    local primary_weapons = {
-        Auto = 'buy scar20; buy g3sg1;',
-        Scout = 'buy ssg08;',
-        AWP = 'buy awp;'
-    }
-
-    local secondary_weapons = {
-        ["Deagle | R8"] = 'buy deagle;',
-        Dualies = 'buy elite;',
-        P250 = 'buy p250;',
-        ["CZ | FN57 | Tec9"] = 'buy tec9;'
-    }
-
-    for i = 1, #other do
-        buy = buy .. 'buy ' .. other[i] .. ';'
-    end
-
-    if primary_weapons[primary] then
-        buy = buy .. primary_weapons[primary]
-    end
-
-    if secondary_weapons[second] then
-        buy = buy .. secondary_weapons[second]
-    end
-
-    for i = 1, #nades do
-        buy = buy .. 'buy ' .. nades[i] .. ';'
-    end
-
-    if buy ~= '' then
-        client.exec(buy)
-        -- client.exec('use weapon_knife')
-    end
-end
-
-aa_package = ui_handler.setup(antiaim_system)
-aa_config = aa_package:save()
-package = ui_handler.setup(lua_menu)
-config = package:save()
-
-local config_system, protected, presets = {}, {}, {}
-
-protected.database = {
-    configs = ':FineBit::configs:'
-}
-
-config_system.get = function(name)
-    local database = database.read(protected.database.configs) or {}
-
-    for i, v in pairs(database) do
-        if v.name == name then
-            return {
-                config = v.config,
-                config2 = v.config2,
-                index = i
-            }
-        end
-    end
-
-    for i, v in pairs(presets) do
-        if v.name == name then
-            return {
-                config = v.config,
-                config2 = v.config2,
-                index = i
-            }
-        end
-    end
-
-    return false
-end
-
-config_system.save = function(name)
-    local db = database.read(protected.database.configs) or {}
-    local config = {}
-
-    if name:match('[^%w]') ~= nil then
-        return
-    end
-
-    local config = base64.encode(json.stringify(package:save()))
-    local config2 = base64.encode(json.stringify(aa_package:save()))
-
-    local cfg = config_system.get(name)
-
-    if not cfg then
-        table.insert(db, { name = name, config = config, config2 = config2 })
-    else
-        db[cfg.index].config = config
-        db[cfg.index].config2 = config2
-    end
-
-    database.write(protected.database.configs, db)
-end
-
-config_system.delete = function(name)
-    local db = database.read(protected.database.configs) or {}
-
-    for i, v in pairs(db) do
-        if v.name == name then
-            table.remove(db, i)
-            break
-        end
-    end
-
-    for i, v in pairs(presets) do
-        if v.name == name then
-            return false
-        end
-    end
-
-    database.write(protected.database.configs, db)
-end
-
-config_system.config_list = function()
-    local database = database.read(protected.database.configs) or {}
-    local config = {}
-
-    for i, v in pairs(presets) do
-        table.insert(config, v.name)
-    end
-
-    for i, v in pairs(database) do
-        table.insert(config, v.name)
-    end
-
-    return config
-end
-
-
-
-config_system.load_settings = function(e, e2)
-    --package:load(json.parse(base64.decode(e)))
-    --aa_package:load(json.parse(base64.decode(e2)))
-    package:load(e)
-    aa_package:load(e2)
-end
-
-config_system.import_settings = function()
-    local frombuffer = clipboard.get()
-    local config = json.parse(base64.decode(frombuffer))
-    config_system.load_settings(config.config, config.config2)
-end
-
-config_system.export_settings = function(name)
-    local config = { config = package:save(), config2 = aa_package:save() }
-    local toExport = base64.encode(json.stringify(config))
-    clipboard.set(toExport)
-end
-
-config_system.load = function(name)
-    local fromDB = config_system.get(name)
-    config_system.load_settings(json.parse(base64.decode(fromDB.config)), json.parse(base64.decode(fromDB.config2)))
-end
-
-lua_menu.config.list:set_callback(function(value)
-    if value == nil then 
-        return 
-    end
-    local name = ''
-    
-    local configs = config_system.config_list()
-    if configs == nil then 
-        return 
-    end
-
-    name = configs[value:get() + 1] or '23'
-    lua_menu.config.name:set(name)
-end)
-
-lua_menu.config.load:set_callback(function()
-    local name = lua_menu.config.name:get()
-    if name == '' then return end
-    client.exec("Play ".. "buttons/button9")
-
-    local s, p = pcall(config_system.load, name)
-
-    if s then
-        name = name:gsub('*', '')
-        print('Successfully loaded ' .. name)
-    else
-        print('Failed to load ' .. name)
-        print('Source: ', p)
-    end
-    
-end)
-
-lua_menu.config.save:set_callback(function()			
-    local name = lua_menu.config.name:get()
-    if name == '' then return end
-
-    for i, v in pairs(presets) do
-        if v.name == name:gsub('*', '') then
-            print("You can't save built-in preset")
-            return
-        end
-    end
-
-    if name:match('[^%w]') ~= nil then
-        print('Failed to save ' .. name .. ' due to invalid characters')
-        return
-    end
-
-    local protected = function()
-        config_system.save(name)
-        lua_menu.config.list:update(config_system.config_list())
-    end
-
-    if pcall(protected) then
-        print('Configuration ' .. name .. ' has been successfully saved.')
-    else
-        print('Failed to save ' .. name)
-    end
-end)
-
-lua_menu.config.delete:set_callback(function()
-    local name = lua_menu.config.name:get()
-    if name == '' then return end
-
-    if config_system.delete(name) == false then
-        print('Failed to delete ' .. name)
-        lua_menu.config.list:update(config_system.config_list())
-        return
-    end
-
-    for i, v in pairs(presets) do
-        if v.name == name:gsub('*', '') then
-            print('You can`t delete built-in preset ' .. name:gsub('*', ''))
-            return
-        end
-    end
-
-    config_system.delete(name)
-
-    lua_menu.config.list:update(config_system.config_list())
-    lua_menu.config.list:set((#presets) or '')
-    lua_menu.config.name:set(#database.read(protected.database.configs) == 0 and "" or config_system.config_list()[#presets])
-    print('Configuration ' .. name .. 'has been successfully remove.')
-end)
-
-lua_menu.config.import:set_callback(function()
-    local protected = function()
-        config_system.import_settings()
-    end
-
-    if pcall(protected) then
-        print('Successfully imported settings')
-    else
-        print('Failed to import settings')
-    end
-end)
-
-lua_menu.config.export:set_callback(function()
-    local name = lua_menu.config.name:get()
-    if name == '' then return end
-
-    local protected = function()
-        config_system.export_settings(name)
-    end
-
-    if pcall(protected) then
-        print('Successfully exported settings')
-    else
-        print('Failed to export settings')
-    end
-end)
-
-function initDatabase1()
-    if database.read(protected.database.configs) == nil then
-        database.write(protected.database.configs, {})
-    end
-
-    local link = 'eyJjb25maWcyIjpbeyJlbmFibGUiOmZhbHNlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6Ik9mZiIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0IjowLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjowLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJPZmYiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOjAsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo2LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMTIsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6Ik9mZiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJDZW50ZXIiLCJwaXRjaF92YWx1ZTIiOjAsImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjpmYWxzZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjAsInlhd19yaWdodCI6MTAsInBpdGNoX3JhbmRvbV92YWx1ZTEiOjAsInBpdGNoX3NwaW5fc3BlZWQiOjAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6Ik9mZiIsImJvZHlfc2xpZGVyIjoxLCJwaXRjaF9yYW5kb21fdmFsdWUyIjowLCJkZWZfbW9kX2RtIjowLCJ5YXdfdmFsdWVfaml0dGVyMSI6MCwicGl0Y2hfc3Bpbl92YWx1ZSI6MCwieWF3X3JhbmRvbSI6MTAwLCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjoyMiwiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiT2ZmIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMTAsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MiwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjowLCJmb3JjZV9kZWYiOmZhbHNlLCJ5YXdfZGVsYXkiOjQsIm1vZF9kbSI6LTYsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6Ik9mZiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTI0LCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJDZW50ZXIiLCJwaXRjaF92YWx1ZTIiOjAsImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjpmYWxzZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjAsInlhd19yaWdodCI6MzksInBpdGNoX3JhbmRvbV92YWx1ZTEiOjAsInBpdGNoX3NwaW5fc3BlZWQiOjAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6Ik9mZiIsImJvZHlfc2xpZGVyIjoxLCJwaXRjaF9yYW5kb21fdmFsdWUyIjowLCJkZWZfbW9kX2RtIjowLCJ5YXdfdmFsdWVfaml0dGVyMSI6MCwicGl0Y2hfc3Bpbl92YWx1ZSI6MCwieWF3X3JhbmRvbSI6NSwiZm9yY2VfZGVmIjpmYWxzZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOi0zLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJPZmYiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6IkppdHRlciIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOi0yMiwicGl0Y2hfdmFsdWUiOjAsInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6ZmFsc2UsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjowLCJ5YXdfcmlnaHQiOjM5LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiT2ZmIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjIsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MjIsInlhd19yaWdodCI6MzgsInBpdGNoX3JhbmRvbV92YWx1ZTEiOjg5LCJwaXRjaF9zcGluX3NwZWVkIjo1LCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJTcGluIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOi04OSwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOi04OSwieWF3X3JhbmRvbSI6NiwiZm9yY2VfZGVmIjp0cnVlLCJ5YXdfZGVsYXkiOjQsIm1vZF9kbSI6LTMsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6IlNwaW4iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6IkppdHRlciIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOi0yNCwicGl0Y2hfdmFsdWUiOjAsInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6ZmFsc2UsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjowLCJ5YXdfcmlnaHQiOjM5LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiT2ZmIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjYsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9XSwiY29uZmlnIjp7Im1haW4iOnsidGFiIjoi7oeBIENvbmZpZ3MgU3lzdGVtIn0sImNvbmZpZyI6eyJsaXN0IjoyfSwiYW50aWFpbSI6eyJ5YXdfYmFzZSI6IkF0IHRhcmdldHMiLCJhZGRvbnMiOlsiQW50aS1CcnV0ZWZvcmNlIiwiQW50aSBCYWNrc3RhYiIsIlNhZmUgSGVhZCIsIn4iXSwieWF3X2RpcmVjdGlvbiI6WyJGcmVlc3RhbmRpbmciLCJNYW51YWwiLCJFZGdlIFlhdyIsIn4iXSwia2V5X2ZvcndhcmQiOlsxLDAsIn4iXSwia2V5X2xlZnQiOlsxLDkwLCJ+Il0sImNvbmRpdGlvbiI6Ilx1MDAwYkR1Y2stTW92ZVxyIiwic2FmZV9oZWFkIjpbIkFpcitDIEtuaWZlIiwiQWlyK0MgWmV1cyIsIn4iXSwiYW50aV9icnV0ZWZvcmNlX21vZGUiOiJNaW5pbWFsIiwidGFiIjoiQnVpbGRlciIsImtleV9mcmVlc3RhbmQiOlsxLDE4LCJ+Il0sImtleV9lZGdlX3lhdyI6WzEsNSwifiJdLCJrZXlfcmlnaHQiOlsxLDY3LCJ+Il19LCJtaXNjIjp7InBlcmZvbWFuY2VfYm9vc3QiOnRydWUsImFpbXRvb2xzX2VzcF9mbGFncyI6dHJ1ZSwiaW5mb19wYW5lbF9jIjoiI0M1RDBGRkZGIiwiZGFtYWdlX2luZGljYXRvciI6dHJ1ZSwiYXV0b2J1eV9zZWNvbmQiOiJOb25lIiwiY3Jvc3NfaW5kIjpmYWxzZSwiYXV0b2J1eV9wcmltYXJ5IjoiTm9uZSIsImxvZ19oaXRfY29sb3JfYyI6IiNDNUQwRkZGRiIsInRoaXJkX3BlcnNvbl92YWx1ZSI6NDAsImFuaW1hdGlvbl9hZGRvbnMiOlsiQWRqdXN0IEJvZHkgTGVhbiIsIkVhcnRocXVha2UiLCJTbW9vdGhpbmciLCJ+Il0sImFpbXRvb2xzX2JhaW1fc2FmZSI6dHJ1ZSwiYWltdG9vbHMiOnRydWUsImFpbXRvb2xzX3ZhbHVlX3NhZmUiOjMwLCJkZWZlbnNpdmVfc3R5bGUiOiJNb2Rlcm4iLCJqdW1wX3N0b3BfZGlzdGFuY2UiOjEwMCwiYXV0b2J1eSI6ZmFsc2UsIndhdGVybWFya19jb2xvciI6dHJ1ZSwiYW5pbWF0aW9uX2FpciI6IlN0YXRpYyIsImZhc3RfbGFkZGVyIjp0cnVlLCJhbmltYXRpb25fYm9keV9sZWFuIjoxMDAsImFpbXRvb2xzX3ZhbHVlX2JhaW0iOjEwLCJhc3BlY3RyYXRpbyI6dHJ1ZSwidmVsb2NpdHlfd2luZG93X2MiOiIjQzVEMEZGRkYiLCJhaW10b29sc19wcmlvcml0eSI6dHJ1ZSwicHJlZGljdCI6dHJ1ZSwiZGFtYWdlX2luZGljYXRvcl9zdHlsZSI6IlBpeGVsIiwibWFudWFsX2Fycm93cyI6dHJ1ZSwidGhpcmRfcGVyc29uIjp0cnVlLCJqdW1wX3N0b3BfaG90a2V5IjpbMSwwLCJ+Il0sImxvZ19taXNzX2NvbG9yX2MiOiIjNUQ1RDVERkYiLCJjcm9zc19jb2xvciI6dHJ1ZSwic3BhbW1lcnMiOlsifiJdLCJjcm9zc19jb2xvcl9jIjoiI0ZGRkZGRkZGIiwid2F0ZXJtYXJrX3N0eWxlIjoiRGVmYXVsdCIsImxvZyI6dHJ1ZSwicmVzb2x2ZXJfdHlwZSI6Ik5ldyBNZXRob2QiLCJ3YXRlcm1hcmtfY29sb3JfYyI6IiNDNUQwRkZGRiIsImF1dG9idXlfbmFkZXMiOlsifiJdLCJjcm9zc19pbmRfYyI6IiNDNUQwRkZGRiIsImluZm9fcGFuZWwiOmZhbHNlLCJqdW1wX3N0b3AiOmZhbHNlLCJrZXlfY29sb3JfYyI6IiNGRkZGRkZGRiIsImF1dG9idXlfb3RoZXIiOlsifiJdLCJ0ZWxlcG9ydF9rZXkiOlsxLDAsIn4iXSwiZml4X2hpZGVzaG90cyI6dHJ1ZSwidGVsZXBvcnQiOmZhbHNlLCJyZXNvbHZlcl9mbGFnIjp0cnVlLCJ2ZWxvY2l0eV93aW5kb3ciOnRydWUsInJlc29sdmVyIjp0cnVlLCJrZXlfY29sb3IiOnRydWUsIndhdGVybWFyayI6dHJ1ZSwiYW5pbWF0aW9uIjp0cnVlLCJ2ZWxvY2l0eV9zdHlsZSI6Ik1vZGVybiIsImRhbWFnZV9pbmRpY2F0b3JfbW9kZSI6Ik9uIEJpbmQiLCJkZWZlbnNpdmVfd2luZG93X2MiOiIjQzVEMEZGRkYiLCJsb2dfZ2xvd19jb2xvcl9jIjoiI0M1RDBGRkZGIiwiYXNwZWN0cmF0aW9fdmFsdWUiOjEzMywicHJlZGljdF9rZXkiOlsyLDg4LCJ+Il0sImFuaW1hdGlvbl9ncm91bmQiOiJTdGF0aWMiLCJkZWZlbnNpdmVfd2luZG93Ijp0cnVlLCJsb2dfdHlwZSI6WyJDb25zb2xlIiwiU2NyZWVuIiwifiJdLCJtYW51YWxfYXJyb3dzX2MiOiIjQzVEMEZGRkYifX19'
-
-    
-    local decode = base64.decode(link, 'base64')
-    local toTable = json.parse(decode)
-
-    table.insert(presets, { name = '*Default', config = base64.encode(json.stringify(toTable.config)), config2 = base64.encode(json.stringify(toTable.config2))})
-    lua_menu.config.name:set('*Default')
-
-    lua_menu.config.list:update(config_system.config_list())
-
-
-    lua_menu.config.list:update(config_system.config_list())
-end
-
-function initDatabase2() --
-    if database.read(protected.database.configs) == nil then
-        database.write(protected.database.configs, {})
-    end
-
-    local link = 'eyJjb25maWcyIjpbeyJlbmFibGUiOmZhbHNlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6Ik9mZiIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0IjowLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjowLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJPZmYiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOjAsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo2LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMTIsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6Ik9mZiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJDZW50ZXIiLCJwaXRjaF92YWx1ZTIiOjAsImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjpmYWxzZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjAsInlhd19yaWdodCI6MTAsInBpdGNoX3JhbmRvbV92YWx1ZTEiOjAsInBpdGNoX3NwaW5fc3BlZWQiOjAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6Ik9mZiIsImJvZHlfc2xpZGVyIjoxLCJwaXRjaF9yYW5kb21fdmFsdWUyIjowLCJkZWZfbW9kX2RtIjowLCJ5YXdfdmFsdWVfaml0dGVyMSI6MCwicGl0Y2hfc3Bpbl92YWx1ZSI6MCwieWF3X3JhbmRvbSI6MTAwLCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjoyMiwiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiT2ZmIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMTAsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MiwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjowLCJmb3JjZV9kZWYiOmZhbHNlLCJ5YXdfZGVsYXkiOjQsIm1vZF9kbSI6LTYsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6Ik9mZiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTI0LCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJDZW50ZXIiLCJwaXRjaF92YWx1ZTIiOi0zNywiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOnRydWUsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjozMywieWF3X3JpZ2h0IjozOSwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MzgsInBpdGNoX3NwaW5fc3BlZWQiOjAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6IlJhbmRvbSIsImJvZHlfc2xpZGVyIjoxLCJwaXRjaF9yYW5kb21fdmFsdWUyIjotNjYsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo1LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjoyNSwiZGVmZW5zaXZlX3lhdyI6Ik9wcG9zaXRlIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjIsInBpdGNoX3ZhbHVlIjotMzQsInBpdGNoX3ZhbHVlMSI6NDl9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOnRydWUsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjo1MCwieWF3X3JpZ2h0IjozOSwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiQ3VzdG9tIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjowLCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiU3BpbiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6ODksInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6dHJ1ZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjIyLCJ5YXdfcmlnaHQiOjM4LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjo1LCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJTcGluIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjotODksInlhd19yYW5kb20iOjYsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOi0zLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjIyLCJkZWZlbnNpdmVfeWF3IjoiU3BpbiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTI0LCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJDZW50ZXIiLCJwaXRjaF92YWx1ZTIiOi02OSwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOnRydWUsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjowLCJ5YXdfcmlnaHQiOjM5LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJKaXR0ZXIiLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOi0zLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJSYW5kb20iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MTgwLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjotMTgwLCJ5YXdfbGVmdCI6LTI2LCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjotODl9XSwiY29uZmlnIjp7Im1haW4iOnsidGFiIjoi7oeBIENvbmZpZ3MgU3lzdGVtIn0sImNvbmZpZyI6eyJsaXN0IjoyfSwiYW50aWFpbSI6eyJ5YXdfYmFzZSI6IkF0IHRhcmdldHMiLCJhZGRvbnMiOlsiQW50aS1CcnV0ZWZvcmNlIiwiQW50aSBCYWNrc3RhYiIsIlNhZmUgSGVhZCIsIn4iXSwieWF3X2RpcmVjdGlvbiI6WyJGcmVlc3RhbmRpbmciLCJNYW51YWwiLCJFZGdlIFlhdyIsIn4iXSwia2V5X2ZvcndhcmQiOlsxLDAsIn4iXSwia2V5X2xlZnQiOlsxLDkwLCJ+Il0sImNvbmRpdGlvbiI6Ilx1MDAwYkR1Y2stTW92ZVxyIiwic2FmZV9oZWFkIjpbIkFpcitDIEtuaWZlIiwiQWlyK0MgWmV1cyIsIn4iXSwiYW50aV9icnV0ZWZvcmNlX21vZGUiOiJNaW5pbWFsIiwidGFiIjoiQnVpbGRlciIsImtleV9mcmVlc3RhbmQiOlsxLDE4LCJ+Il0sImtleV9lZGdlX3lhdyI6WzEsNSwifiJdLCJrZXlfcmlnaHQiOlsxLDY3LCJ+Il19LCJtaXNjIjp7InBlcmZvbWFuY2VfYm9vc3QiOnRydWUsImFpbXRvb2xzX2VzcF9mbGFncyI6dHJ1ZSwiaW5mb19wYW5lbF9jIjoiI0M1RDBGRkZGIiwiZGFtYWdlX2luZGljYXRvciI6dHJ1ZSwiYXV0b2J1eV9zZWNvbmQiOiJOb25lIiwiY3Jvc3NfaW5kIjpmYWxzZSwiYXV0b2J1eV9wcmltYXJ5IjoiTm9uZSIsImxvZ19oaXRfY29sb3JfYyI6IiNDNUQwRkZGRiIsInRoaXJkX3BlcnNvbl92YWx1ZSI6NDAsImFuaW1hdGlvbl9hZGRvbnMiOlsiQWRqdXN0IEJvZHkgTGVhbiIsIkVhcnRocXVha2UiLCJTbW9vdGhpbmciLCJ+Il0sImFpbXRvb2xzX2JhaW1fc2FmZSI6dHJ1ZSwiYWltdG9vbHMiOnRydWUsImFpbXRvb2xzX3ZhbHVlX3NhZmUiOjMwLCJkZWZlbnNpdmVfc3R5bGUiOiJNb2Rlcm4iLCJqdW1wX3N0b3BfZGlzdGFuY2UiOjEwMCwiYXV0b2J1eSI6ZmFsc2UsIndhdGVybWFya19jb2xvciI6dHJ1ZSwiYW5pbWF0aW9uX2FpciI6IlN0YXRpYyIsImZhc3RfbGFkZGVyIjp0cnVlLCJhbmltYXRpb25fYm9keV9sZWFuIjoxMDAsImFpbXRvb2xzX3ZhbHVlX2JhaW0iOjEwLCJhc3BlY3RyYXRpbyI6dHJ1ZSwidmVsb2NpdHlfd2luZG93X2MiOiIjQzVEMEZGRkYiLCJhaW10b29sc19wcmlvcml0eSI6dHJ1ZSwicHJlZGljdCI6dHJ1ZSwiZGFtYWdlX2luZGljYXRvcl9zdHlsZSI6IlBpeGVsIiwibWFudWFsX2Fycm93cyI6dHJ1ZSwidGhpcmRfcGVyc29uIjp0cnVlLCJqdW1wX3N0b3BfaG90a2V5IjpbMSwwLCJ+Il0sImxvZ19taXNzX2NvbG9yX2MiOiIjNUQ1RDVERkYiLCJjcm9zc19jb2xvciI6dHJ1ZSwic3BhbW1lcnMiOlsifiJdLCJjcm9zc19jb2xvcl9jIjoiI0ZGRkZGRkZGIiwid2F0ZXJtYXJrX3N0eWxlIjoiRGVmYXVsdCIsImxvZyI6dHJ1ZSwicmVzb2x2ZXJfdHlwZSI6Ik5ldyBNZXRob2QiLCJ3YXRlcm1hcmtfY29sb3JfYyI6IiNDNUQwRkZGRiIsImF1dG9idXlfbmFkZXMiOlsifiJdLCJjcm9zc19pbmRfYyI6IiNDNUQwRkZGRiIsImluZm9fcGFuZWwiOmZhbHNlLCJqdW1wX3N0b3AiOmZhbHNlLCJrZXlfY29sb3JfYyI6IiNGRkZGRkZGRiIsImF1dG9idXlfb3RoZXIiOlsifiJdLCJ0ZWxlcG9ydF9rZXkiOlsxLDAsIn4iXSwiZml4X2hpZGVzaG90cyI6dHJ1ZSwidGVsZXBvcnQiOmZhbHNlLCJyZXNvbHZlcl9mbGFnIjp0cnVlLCJ2ZWxvY2l0eV93aW5kb3ciOnRydWUsInJlc29sdmVyIjp0cnVlLCJrZXlfY29sb3IiOnRydWUsIndhdGVybWFyayI6dHJ1ZSwiYW5pbWF0aW9uIjp0cnVlLCJ2ZWxvY2l0eV9zdHlsZSI6Ik1vZGVybiIsImRhbWFnZV9pbmRpY2F0b3JfbW9kZSI6Ik9uIEJpbmQiLCJkZWZlbnNpdmVfd2luZG93X2MiOiIjQzVEMEZGRkYiLCJsb2dfZ2xvd19jb2xvcl9jIjoiI0M1RDBGRkZGIiwiYXNwZWN0cmF0aW9fdmFsdWUiOjEzMywicHJlZGljdF9rZXkiOlsyLDg4LCJ+Il0sImFuaW1hdGlvbl9ncm91bmQiOiJTdGF0aWMiLCJkZWZlbnNpdmVfd2luZG93Ijp0cnVlLCJsb2dfdHlwZSI6WyJDb25zb2xlIiwiU2NyZWVuIiwifiJdLCJtYW51YWxfYXJyb3dzX2MiOiIjQzVEMEZGRkYifX19'
-
-    
-    local decode = base64.decode(link, 'base64')
-    local toTable = json.parse(decode)
-
-    table.insert(presets, { name = '*Default defensive', config = base64.encode(json.stringify(toTable.config)), config2 = base64.encode(json.stringify(toTable.config2))})
-
-    lua_menu.config.list:update(config_system.config_list())
-
-
-    lua_menu.config.list:update(config_system.config_list())
-end
-
-function initDatabase3() --
-    if database.read(protected.database.configs) == nil then
-        database.write(protected.database.configs, {})
-    end
-
-    local link = 'eyJjb25maWcyIjpbeyJlbmFibGUiOmZhbHNlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6Ik9mZiIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0IjowLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjowLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJPZmYiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOjAsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo2LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMTIsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6Ik9mZiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJPZmYiLCJwaXRjaF92YWx1ZTIiOjAsImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjp0cnVlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo1LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjotMTAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6IkN1c3RvbSIsImJvZHlfc2xpZGVyIjotMSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOi05MCwicGl0Y2hfc3Bpbl92YWx1ZSI6NzIsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOjIyLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6OTAsImJvZHlfeWF3X3R5cGUiOiJPcHBvc2l0ZSIsInlhd192YWx1ZV9qaXR0ZXIyIjo5MCwieWF3X3ZhbHVlX3JhbmRvbTEiOi05MCwieWF3X2xlZnQiOi01LCJwaXRjaF92YWx1ZSI6NzIsInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6ZmFsc2UsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjowLCJ5YXdfcmlnaHQiOjQyLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjotNiwiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiT2ZmIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjQsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6LTM3LCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6dHJ1ZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjksInlhd19yaWdodCI6LTMsInBpdGNoX3JhbmRvbV92YWx1ZTEiOjQ5LCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJDdXN0b20iLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6LTM3LCJkZWZfbW9kX2RtIjowLCJ5YXdfdmFsdWVfaml0dGVyMSI6LTQ4LCJwaXRjaF9zcGluX3ZhbHVlIjo0NywieWF3X3JhbmRvbSI6NSwiZm9yY2VfZGVmIjp0cnVlLCJ5YXdfZGVsYXkiOjQsIm1vZF9kbSI6LTMsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6OSwiZGVmZW5zaXZlX3lhdyI6IlNwaW4iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9wcG9zaXRlIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjotNDgsInlhd19sZWZ0IjotMzAsInBpdGNoX3ZhbHVlIjo0NywicGl0Y2hfdmFsdWUxIjo0OX0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiUmFuZG9tIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6ZmFsc2UsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjo1LCJ5YXdfcmlnaHQiOjM5LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJDdXN0b20iLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjg5LCJ5YXdfcmFuZG9tIjowLCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjo1LCJkZWZlbnNpdmVfeWF3IjoiU3BpbiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6ODksInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6dHJ1ZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjIyLCJ5YXdfcmlnaHQiOjM4LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjo1LCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJTcGluIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo2LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjoyMiwiZGVmZW5zaXZlX3lhdyI6IlNwaW4iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6IkppdHRlciIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOi0yNCwicGl0Y2hfdmFsdWUiOjAsInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjotNjksImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjpmYWxzZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjAsInlhd19yaWdodCI6MzksInBpdGNoX3JhbmRvbV92YWx1ZTEiOi04OSwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiSml0dGVyIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOi02OSwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOi0zLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJSYW5kb20iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6IkppdHRlciIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOi0yNiwicGl0Y2hfdmFsdWUiOjAsInBpdGNoX3ZhbHVlMSI6LTg5fV0sImNvbmZpZyI6eyJtYWluIjp7InRhYiI6Iu6HgSBDb25maWdzIFN5c3RlbSJ9LCJjb25maWciOnsibGlzdCI6Mn0sImFudGlhaW0iOnsieWF3X2Jhc2UiOiJBdCB0YXJnZXRzIiwiYWRkb25zIjpbIkFudGktQnJ1dGVmb3JjZSIsIkFudGkgQmFja3N0YWIiLCJTYWZlIEhlYWQiLCJ+Il0sInlhd19kaXJlY3Rpb24iOlsiRnJlZXN0YW5kaW5nIiwiTWFudWFsIiwiRWRnZSBZYXciLCJ+Il0sImtleV9mb3J3YXJkIjpbMSwwLCJ+Il0sImtleV9sZWZ0IjpbMSw5MCwifiJdLCJjb25kaXRpb24iOiJcdTAwMGJEdWNrXHIiLCJzYWZlX2hlYWQiOlsiQWlyK0MgS25pZmUiLCJBaXIrQyBaZXVzIiwifiJdLCJhbnRpX2JydXRlZm9yY2VfbW9kZSI6Ik1pbmltYWwiLCJ0YWIiOiJCdWlsZGVyIiwia2V5X2ZyZWVzdGFuZCI6WzIsODEsIn4iXSwia2V5X2VkZ2VfeWF3IjpbMSwxOCwifiJdLCJrZXlfcmlnaHQiOlsxLDY3LCJ+Il19LCJtaXNjIjp7InBlcmZvbWFuY2VfYm9vc3QiOnRydWUsImFpbXRvb2xzX2VzcF9mbGFncyI6dHJ1ZSwiaW5mb19wYW5lbF9jIjoiI0M1RDBGRkZGIiwiZGFtYWdlX2luZGljYXRvciI6dHJ1ZSwiYXV0b2J1eV9zZWNvbmQiOiJEZWFnbGUgfCBSOCIsImNyb3NzX2luZCI6ZmFsc2UsImF1dG9idXlfcHJpbWFyeSI6IkFXUCIsImxvZ19oaXRfY29sb3JfYyI6IiNDNUQwRkZGRiIsInRoaXJkX3BlcnNvbl92YWx1ZSI6NjgsImFuaW1hdGlvbl9hZGRvbnMiOlsiQWRqdXN0IEJvZHkgTGVhbiIsIkVhcnRocXVha2UiLCJTbW9vdGhpbmciLCJ+Il0sImFpbXRvb2xzX2JhaW1fc2FmZSI6dHJ1ZSwiYWltdG9vbHMiOmZhbHNlLCJhaW10b29sc192YWx1ZV9zYWZlIjozMCwiZGVmZW5zaXZlX3N0eWxlIjoiTW9kZXJuIiwianVtcF9zdG9wX2Rpc3RhbmNlIjoyMDAsImF1dG9idXkiOmZhbHNlLCJ3YXRlcm1hcmtfY29sb3IiOnRydWUsImFuaW1hdGlvbl9haXIiOiJTdGF0aWMiLCJmYXN0X2xhZGRlciI6dHJ1ZSwiYW5pbWF0aW9uX2JvZHlfbGVhbiI6MTAwLCJhaW10b29sc192YWx1ZV9iYWltIjoxMCwiYXNwZWN0cmF0aW8iOmZhbHNlLCJ2ZWxvY2l0eV93aW5kb3dfYyI6IiNDNUQwRkZGRiIsImFpbXRvb2xzX3ByaW9yaXR5Ijp0cnVlLCJwcmVkaWN0IjpmYWxzZSwiZGFtYWdlX2luZGljYXRvcl9zdHlsZSI6IlBpeGVsIiwibWFudWFsX2Fycm93cyI6dHJ1ZSwidGhpcmRfcGVyc29uIjp0cnVlLCJqdW1wX3N0b3BfaG90a2V5IjpbMiw4MSwifiJdLCJsb2dfbWlzc19jb2xvcl9jIjoiIzVENUQ1REZGIiwiY3Jvc3NfY29sb3IiOnRydWUsInNwYW1tZXJzIjpbIn4iXSwiY3Jvc3NfY29sb3JfYyI6IiNGRkZGRkZGRiIsIndhdGVybWFya19zdHlsZSI6IkRlZmF1bHQiLCJsb2ciOnRydWUsInJlc29sdmVyX3R5cGUiOiJTYWZlIiwid2F0ZXJtYXJrX2NvbG9yX2MiOiIjQzVEMEZGRkYiLCJhdXRvYnV5X25hZGVzIjpbIk1vbG90b3YiLCJIZWdyZW5hZGUiLCJTbW9rZSIsIn4iXSwiY3Jvc3NfaW5kX2MiOiIjQzVEMEZGRkYiLCJpbmZvX3BhbmVsIjpmYWxzZSwianVtcF9zdG9wIjp0cnVlLCJrZXlfY29sb3JfYyI6IiNGRkZGRkZGRiIsImF1dG9idXlfb3RoZXIiOlsiVmVzdGhlbG0iLCJWZXN0IiwiVGFzZXIiLCJEZWZ1c2VyIiwifiJdLCJ0ZWxlcG9ydF9rZXkiOlsxLDY2LCJ+Il0sImZpeF9oaWRlc2hvdHMiOnRydWUsInRlbGVwb3J0Ijp0cnVlLCJyZXNvbHZlcl9mbGFnIjp0cnVlLCJ2ZWxvY2l0eV93aW5kb3ciOnRydWUsInJlc29sdmVyIjp0cnVlLCJrZXlfY29sb3IiOnRydWUsIndhdGVybWFyayI6dHJ1ZSwiYW5pbWF0aW9uIjp0cnVlLCJ2ZWxvY2l0eV9zdHlsZSI6Ik1vZGVybiIsImRhbWFnZV9pbmRpY2F0b3JfbW9kZSI6Ik9uIEJpbmQiLCJkZWZlbnNpdmVfd2luZG93X2MiOiIjQzVEMEZGRkYiLCJsb2dfZ2xvd19jb2xvcl9jIjoiI0M1RDBGRkZGIiwiYXNwZWN0cmF0aW9fdmFsdWUiOjAsInByZWRpY3Rfa2V5IjpbMSwwLCJ+Il0sImFuaW1hdGlvbl9ncm91bmQiOiJTdGF0aWMiLCJkZWZlbnNpdmVfd2luZG93Ijp0cnVlLCJsb2dfdHlwZSI6WyJDb25zb2xlIiwiU2NyZWVuIiwifiJdLCJtYW51YWxfYXJyb3dzX2MiOiIjQzVEMEZGRkYifX19'
-
-    
-    local decode = base64.decode(link, 'base64')
-    local toTable = json.parse(decode)
-
-    table.insert(presets, { name = '*Medoda', config = base64.encode(json.stringify(toTable.config)), config2 = base64.encode(json.stringify(toTable.config2))})
-
-    lua_menu.config.list:update(config_system.config_list())
-
-
-    lua_menu.config.list:update(config_system.config_list())
-end
-
-function initDatabase4()
-    if database.read(protected.database.configs) == nil then
-        database.write(protected.database.configs, {})
-    end
-
-    local link = 'eyJjb25maWcyIjpbeyJlbmFibGUiOmZhbHNlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6Ik9mZiIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0IjowLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjowLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJPZmYiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOjAsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo2LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMTIsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6Ik9mZiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJPZmYiLCJwaXRjaF92YWx1ZTIiOjAsImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjp0cnVlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo1LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjotMTAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6IkN1c3RvbSIsImJvZHlfc2xpZGVyIjotMSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOi05MCwicGl0Y2hfc3Bpbl92YWx1ZSI6NzIsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOjIyLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6OTAsImJvZHlfeWF3X3R5cGUiOiJPcHBvc2l0ZSIsInlhd192YWx1ZV9qaXR0ZXIyIjo5MCwieWF3X3ZhbHVlX3JhbmRvbTEiOi05MCwieWF3X2xlZnQiOi01LCJwaXRjaF92YWx1ZSI6NzIsInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6ZmFsc2UsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjowLCJ5YXdfcmlnaHQiOjQyLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjotNiwiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiT2ZmIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjQsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6LTM3LCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6dHJ1ZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjksInlhd19yaWdodCI6LTMsInBpdGNoX3JhbmRvbV92YWx1ZTEiOjQ5LCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJDdXN0b20iLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6LTM3LCJkZWZfbW9kX2RtIjowLCJ5YXdfdmFsdWVfaml0dGVyMSI6LTQ4LCJwaXRjaF9zcGluX3ZhbHVlIjo0NywieWF3X3JhbmRvbSI6NSwiZm9yY2VfZGVmIjp0cnVlLCJ5YXdfZGVsYXkiOjQsIm1vZF9kbSI6LTMsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6OSwiZGVmZW5zaXZlX3lhdyI6IlNwaW4iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9wcG9zaXRlIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjotNDgsInlhd19sZWZ0IjotMzAsInBpdGNoX3ZhbHVlIjo0NywicGl0Y2hfdmFsdWUxIjo0OX0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiUmFuZG9tIiwicGl0Y2hfdmFsdWUyIjo4OSwiZGVmX2JvZHlfc2xpZGVyIjotMTgwLCJkZWZlbnNpdmUiOnRydWUsImRlZl9ib2R5X3lhd190eXBlIjoiT3Bwb3NpdGUiLCJ5YXdfdmFsdWUiOjUsInlhd19yaWdodCI6MzksInBpdGNoX3JhbmRvbV92YWx1ZTEiOi04OSwicGl0Y2hfc3Bpbl9zcGVlZCI6MTAsImRlZl95YXdfdmFsdWUiOi0xNTQsImRlZmVuc2l2ZV9waXRjaCI6IlNwaW4iLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MTgwLCJ5YXdfdmFsdWVfaml0dGVyMSI6MCwicGl0Y2hfc3Bpbl92YWx1ZSI6ODksInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOi0zLCJkZWZlbnNpdmVfdHlwZSI6IkJ1aWxkZXIiLCJkZWZfbW9kX3R5cGUiOiJSYW5kb20iLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjUsImRlZmVuc2l2ZV95YXciOiJTcGluIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjIsInBpdGNoX3ZhbHVlIjo4OSwicGl0Y2hfdmFsdWUxIjotODl9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOnRydWUsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjoyMiwieWF3X3JpZ2h0IjozOCwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6NSwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiU3BpbiIsImJvZHlfc2xpZGVyIjoxLCJwaXRjaF9yYW5kb21fdmFsdWUyIjowLCJkZWZfbW9kX2RtIjowLCJ5YXdfdmFsdWVfaml0dGVyMSI6MCwicGl0Y2hfc3Bpbl92YWx1ZSI6MCwieWF3X3JhbmRvbSI6NiwiZm9yY2VfZGVmIjp0cnVlLCJ5YXdfZGVsYXkiOjQsIm1vZF9kbSI6LTMsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MjIsImRlZmVuc2l2ZV95YXciOiJTcGluIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjQsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6LTY5LCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6ZmFsc2UsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjowLCJ5YXdfcmlnaHQiOjM5LCJwaXRjaF9yYW5kb21fdmFsdWUxIjotODksInBpdGNoX3NwaW5fc3BlZWQiOjAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6IkppdHRlciIsImJvZHlfc2xpZGVyIjoxLCJwaXRjaF9yYW5kb21fdmFsdWUyIjotNjksImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjowLCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiUmFuZG9tIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjYsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOi04OX1dLCJjb25maWciOnsibWFpbiI6eyJ0YWIiOiLuh4EgQ29uZmlncyBTeXN0ZW0ifSwiY29uZmlnIjp7Imxpc3QiOjR9LCJhbnRpYWltIjp7Inlhd19iYXNlIjoiQXQgdGFyZ2V0cyIsImFkZG9ucyI6WyJBbnRpLUJydXRlZm9yY2UiLCJBbnRpIEJhY2tzdGFiIiwiU2FmZSBIZWFkIiwifiJdLCJ5YXdfZGlyZWN0aW9uIjpbIkZyZWVzdGFuZGluZyIsIk1hbnVhbCIsIkVkZ2UgWWF3IiwifiJdLCJrZXlfZm9yd2FyZCI6WzEsMCwifiJdLCJrZXlfbGVmdCI6WzEsOTAsIn4iXSwiY29uZGl0aW9uIjoiXHUwMDBiQWlyLUNyb3VjaFxyIiwic2FmZV9oZWFkIjpbIkFpcitDIEtuaWZlIiwiQWlyK0MgWmV1cyIsIn4iXSwiYW50aV9icnV0ZWZvcmNlX21vZGUiOiJNaW5pbWFsIiwidGFiIjoiTWFpbiIsImtleV9mcmVlc3RhbmQiOlsyLDgxLCJ+Il0sImtleV9lZGdlX3lhdyI6WzEsMTgsIn4iXSwia2V5X3JpZ2h0IjpbMSw2NywifiJdfSwibWlzYyI6eyJwZXJmb21hbmNlX2Jvb3N0Ijp0cnVlLCJwcmVkaWN0aW5kIjpmYWxzZSwibWFudWFsX2Fycm93c19jIjoiI0M1RDBGRkZGIiwiZGFtYWdlX2luZGljYXRvciI6dHJ1ZSwiYW5pbWF0aW9uX2JvZHlfbGVhbiI6MTAwLCJ0aGlyZF9wZXJzb25fdmFsdWUiOjY4LCJhbmltYXRpb25fYWRkb25zIjpbIkFkanVzdCBCb2R5IExlYW4iLCJFYXJ0aHF1YWtlIiwiU21vb3RoaW5nIiwifiJdLCJhaW10b29scyI6dHJ1ZSwiYWltdG9vbHNfdmFsdWVfc2FmZSI6ODYsImRlZmVuc2l2ZV9zdHlsZSI6Ik1vZGVybiIsImFpbXRvb2xzX2VzcF9mbGFncyI6dHJ1ZSwid2F0ZXJtYXJrX2NvbG9yIjp0cnVlLCJwcmVkaWN0djJpbmQiOmZhbHNlLCJmYXN0X2xhZGRlciI6dHJ1ZSwiYXNwZWN0cmF0aW8iOmZhbHNlLCJwcmVkaWN0IjpmYWxzZSwiZGFtYWdlX2luZGljYXRvcl9zdHlsZSI6IlBpeGVsIiwibWFudWFsX2Fycm93cyI6dHJ1ZSwidGhpcmRfcGVyc29uIjp0cnVlLCJqdW1wX3N0b3BfaG90a2V5IjpbMiw4MSwifiJdLCJ3YXRlcm1hcmtfc3R5bGUiOiJEZWZhdWx0IiwianVtcF9zdG9wIjpmYWxzZSwiY3Jvc3NfaW5kX2MiOiIjQzVEMEZGRkYiLCJ3YXRlcm1hcmsiOnRydWUsImtleV9jb2xvcl9jIjoiI0ZGRkZGRkZGIiwicmVzb2x2ZXJfdHlwZSI6IlNhZmUiLCJwaW5ncG9zbG93IjoiSGlnaCIsInRlbGVwb3J0Ijp0cnVlLCJ3YXRlcm1hcmtfY29sb3JfYyI6IiNDNUQwRkZGRiIsInZlbG9jaXR5X3dpbmRvd19jIjoiI0M1RDBGRkZGIiwicHJlZGljdF9rZXkiOlsxLDAsIn4iXSwiZGVmZW5zaXZlX3dpbmRvdyI6dHJ1ZSwicHJlZGljdF9rZXl2MiI6WzEsMCwifiJdLCJwaW5ncG9zIjoxLCJjcm9zc19jb2xvciI6dHJ1ZSwiYXV0b2J1eV9zZWNvbmQiOiJEZWFnbGUgfCBSOCIsImNyb3NzX2luZCI6ZmFsc2UsImF1dG9idXlfcHJpbWFyeSI6IkFXUCIsImxvZ19oaXRfY29sb3JfYyI6IiNDNUQwRkZGRiIsImFuaW1hdGlvbl9ncm91bmQiOiJTdGF0aWMiLCJsb2dfbWlzc19jb2xvcl9jIjoiIzVENUQ1REZGIiwiaW5mb19wYW5lbF9jIjoiI0M1RDBGRkZGIiwiYWltdG9vbHNfcHJpb3JpdHkiOnRydWUsInByZWRpY3RfZmxhZyI6ZmFsc2UsInJlc29sdmVyIjp0cnVlLCJyZXNvbHZlcl9mbGFnIjp0cnVlLCJrZXlfY29sb3IiOnRydWUsImxvZ190eXBlIjpbIkNvbnNvbGUiLCJTY3JlZW4iLCJ+Il0sImp1bXBfc3RvcF9kaXN0YW5jZSI6MjAwLCJwcmVkaWN0X3R5cGUiOiJPbGQiLCJhdXRvYnV5X290aGVyIjpbIlZlc3RoZWxtIiwiVmVzdCIsIlRhc2VyIiwiRGVmdXNlciIsIn4iXSwiYW5pbWF0aW9uIjp0cnVlLCJ2ZWxvY2l0eV93aW5kb3ciOnRydWUsImFuaW1hdGlvbl9haXIiOiJTdGF0aWMiLCJsb2dfZ2xvd19jb2xvcl9jIjoiI0M1RDBGRkZGIiwiZGFtYWdlX2luZGljYXRvcl9tb2RlIjoiT24gQmluZCIsImRlZmVuc2l2ZV93aW5kb3dfYyI6IiNDNUQwRkZGRiIsImNyb3NzX2NvbG9yX2MiOiIjRkZGRkZGRkYiLCJhdXRvYnV5IjpmYWxzZSwiYWltdG9vbHNfdmFsdWVfYmFpbSI6NzAsImZpeF9oaWRlc2hvdHMiOnRydWUsInNwYW1tZXJzIjpbIn4iXSwidGVsZXBvcnRfa2V5IjpbMSw2NiwifiJdLCJpbmZvX3BhbmVsIjpmYWxzZSwiYXNwZWN0cmF0aW9fdmFsdWUiOjAsInByZWRpY3R2MiI6ZmFsc2UsImxvZyI6dHJ1ZSwidmVsb2NpdHlfc3R5bGUiOiJNb2Rlcm4iLCJhaW10b29sc19iYWltX3NhZmUiOnRydWUsImF1dG9idXlfbmFkZXMiOlsiTW9sb3RvdiIsIkhlZ3JlbmFkZSIsIlNtb2tlIiwifiJdfX19'
-
-    
-    local decode = base64.decode(link, 'base64')
-    local toTable = json.parse(decode)
-
-    table.insert(presets, { name = '*Medoda defensive', config = base64.encode(json.stringify(toTable.config)), config2 = base64.encode(json.stringify(toTable.config2))})
-    lua_menu.config.name:set('*Default')
-
-    lua_menu.config.list:update(config_system.config_list())
-
-
-    lua_menu.config.list:update(config_system.config_list())
-end
-
-function initDatabase5()
-    if database.read(protected.database.configs) == nil then
-        database.write(protected.database.configs, {})
-    end
-
-    local link = 'eyJjb25maWcyIjpbeyJlbmFibGUiOmZhbHNlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6Ik9mZiIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0IjowLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjowLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJPZmYiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOjAsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo2LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMTIsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6Ik9mZiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJPZmYiLCJwaXRjaF92YWx1ZTIiOjAsImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjp0cnVlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo1LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjotMTAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6IkN1c3RvbSIsImJvZHlfc2xpZGVyIjotMSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOi05MCwicGl0Y2hfc3Bpbl92YWx1ZSI6NzIsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOjIyLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6OTAsImJvZHlfeWF3X3R5cGUiOiJPcHBvc2l0ZSIsInlhd192YWx1ZV9qaXR0ZXIyIjo5MCwieWF3X3ZhbHVlX3JhbmRvbTEiOi05MCwieWF3X2xlZnQiOi01LCJwaXRjaF92YWx1ZSI6NzIsInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6ZmFsc2UsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjowLCJ5YXdfcmlnaHQiOjQyLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjotNiwiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiT2ZmIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjQsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6LTM3LCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6dHJ1ZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjksInlhd19yaWdodCI6LTMsInBpdGNoX3JhbmRvbV92YWx1ZTEiOjQ5LCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJDdXN0b20iLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6LTM3LCJkZWZfbW9kX2RtIjowLCJ5YXdfdmFsdWVfaml0dGVyMSI6LTQ4LCJwaXRjaF9zcGluX3ZhbHVlIjo0NywieWF3X3JhbmRvbSI6NSwiZm9yY2VfZGVmIjp0cnVlLCJ5YXdfZGVsYXkiOjQsIm1vZF9kbSI6LTMsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6OSwiZGVmZW5zaXZlX3lhdyI6IlNwaW4iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9wcG9zaXRlIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjotNDgsInlhd19sZWZ0IjotMzAsInBpdGNoX3ZhbHVlIjo0NywicGl0Y2hfdmFsdWUxIjo0OX0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiUmFuZG9tIiwicGl0Y2hfdmFsdWUyIjotMzIsImRlZl9ib2R5X3NsaWRlciI6MTksImRlZmVuc2l2ZSI6dHJ1ZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPcHBvc2l0ZSIsInlhd192YWx1ZSI6LTUyLCJ5YXdfcmlnaHQiOjE2LCJwaXRjaF9yYW5kb21fdmFsdWUxIjoyMSwicGl0Y2hfc3Bpbl9zcGVlZCI6MSwiZGVmX3lhd192YWx1ZSI6MTQsImRlZmVuc2l2ZV9waXRjaCI6IkN1c3RvbSIsImJvZHlfc2xpZGVyIjoxMCwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6LTIxLCJkZWZfbW9kX2RtIjotMTQsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjotODksInlhd19yYW5kb20iOjIsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo4LCJtb2RfZG0iOjksImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6IlJhbmRvbSIsInlhd192YWx1ZV9vcHBvc2l0ZSI6NSwiZGVmZW5zaXZlX3lhdyI6IlNwaW4iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MjEsImJvZHlfeWF3X3R5cGUiOiJPcHBvc2l0ZSIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6LTM2LCJ5YXdfbGVmdCI6LTIxLCJwaXRjaF92YWx1ZSI6NSwicGl0Y2hfdmFsdWUxIjoyNX0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjowLCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6dHJ1ZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjIyLCJ5YXdfcmlnaHQiOjM4LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjo1LCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJTcGluIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo2LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjoyMiwiZGVmZW5zaXZlX3lhdyI6IlNwaW4iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6IkppdHRlciIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOi0yNCwicGl0Y2hfdmFsdWUiOjAsInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVmYXVsdCIsIm1vZF90eXBlIjoiQ2VudGVyIiwicGl0Y2hfdmFsdWUyIjotNjksImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjpmYWxzZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWUiOjAsInlhd19yaWdodCI6MzksInBpdGNoX3JhbmRvbV92YWx1ZTEiOi04OSwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiSml0dGVyIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOi02OSwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOi0zLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJSYW5kb20iLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6IkppdHRlciIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOi0yNiwicGl0Y2hfdmFsdWUiOjAsInBpdGNoX3ZhbHVlMSI6LTg5fV0sImNvbmZpZyI6eyJtYWluIjp7InRhYiI6Iu6HgSBDb25maWdzIFN5c3RlbSJ9LCJjb25maWciOnsibGlzdCI6MH0sImFudGlhaW0iOnsieWF3X2Jhc2UiOiJBdCB0YXJnZXRzIiwiYWRkb25zIjpbIkFudGktQnJ1dGVmb3JjZSIsIkFudGkgQmFja3N0YWIiLCJTYWZlIEhlYWQiLCJ+Il0sInlhd19kaXJlY3Rpb24iOlsiRnJlZXN0YW5kaW5nIiwiTWFudWFsIiwiRWRnZSBZYXciLCJ+Il0sImtleV9mb3J3YXJkIjpbMSwwLCJ+Il0sImtleV9sZWZ0IjpbMSwwLCJ+Il0sImNvbmRpdGlvbiI6Ilx1MDAwYkFpci1Dcm91Y2hcciIsInNhZmVfaGVhZCI6WyJBaXIrQyBLbmlmZSIsIkFpcitDIFpldXMiLCJ+Il0sImFudGlfYnJ1dGVmb3JjZV9tb2RlIjoiTWluaW1hbCIsInRhYiI6IkJ1aWxkZXIiLCJrZXlfZnJlZXN0YW5kIjpbMSwxOCwifiJdLCJrZXlfZWRnZV95YXciOlsxLDAsIn4iXSwia2V5X3JpZ2h0IjpbMSwwLCJ+Il19LCJtaXNjIjp7InBlcmZvbWFuY2VfYm9vc3QiOnRydWUsInByZWRpY3RpbmQiOmZhbHNlLCJtYW51YWxfYXJyb3dzX2MiOiIjQzVEMEZGRkYiLCJkYW1hZ2VfaW5kaWNhdG9yIjp0cnVlLCJhbmltYXRpb25fYm9keV9sZWFuIjoxMDAsInRoaXJkX3BlcnNvbl92YWx1ZSI6NDksImFuaW1hdGlvbl9hZGRvbnMiOlsiQWRqdXN0IEJvZHkgTGVhbiIsIkVhcnRocXVha2UiLCJTbW9vdGhpbmciLCJ+Il0sImFpbXRvb2xzIjpmYWxzZSwiYWltdG9vbHNfdmFsdWVfc2FmZSI6MzAsImRlZmVuc2l2ZV9zdHlsZSI6Ik1vZGVybiIsImFpbXRvb2xzX2VzcF9mbGFncyI6dHJ1ZSwid2F0ZXJtYXJrX2NvbG9yIjp0cnVlLCJwcmVkaWN0djJpbmQiOmZhbHNlLCJmYXN0X2xhZGRlciI6dHJ1ZSwiYXNwZWN0cmF0aW8iOnRydWUsInByZWRpY3QiOmZhbHNlLCJkYW1hZ2VfaW5kaWNhdG9yX3N0eWxlIjoiUGl4ZWwiLCJtYW51YWxfYXJyb3dzIjpmYWxzZSwidGhpcmRfcGVyc29uIjp0cnVlLCJqdW1wX3N0b3BfaG90a2V5IjpbMiwwLCJ+Il0sIndhdGVybWFya19zdHlsZSI6IkRlZmF1bHQiLCJqdW1wX3N0b3AiOnRydWUsImNyb3NzX2luZF9jIjoiI0M1RDBGRkZGIiwid2F0ZXJtYXJrIjp0cnVlLCJrZXlfY29sb3JfYyI6IiNGRkZGRkZGRiIsInJlc29sdmVyX3R5cGUiOiJTYWZlIiwicGluZ3Bvc2xvdyI6IkhpZ2giLCJ0ZWxlcG9ydCI6dHJ1ZSwid2F0ZXJtYXJrX2NvbG9yX2MiOiIjQzVEMEZGRkYiLCJ2ZWxvY2l0eV93aW5kb3dfYyI6IiNDNUQwRkZGRiIsInByZWRpY3Rfa2V5IjpbMSwwLCJ+Il0sImRlZmVuc2l2ZV93aW5kb3ciOmZhbHNlLCJwcmVkaWN0X2tleXYyIjpbMSwwLCJ+Il0sInBpbmdwb3MiOjEsImNyb3NzX2NvbG9yIjp0cnVlLCJhdXRvYnV5X3NlY29uZCI6IkRlYWdsZSB8IFI4IiwiY3Jvc3NfaW5kIjpmYWxzZSwiYXV0b2J1eV9wcmltYXJ5IjoiQVdQIiwibG9nX2hpdF9jb2xvcl9jIjoiI0M1RDBGRkZGIiwiYW5pbWF0aW9uX2dyb3VuZCI6IlN0YXRpYyIsImxvZ19taXNzX2NvbG9yX2MiOiIjNUQ1RDVERkYiLCJpbmZvX3BhbmVsX2MiOiIjQzVEMEZGRkYiLCJhaW10b29sc19wcmlvcml0eSI6dHJ1ZSwicHJlZGljdF9mbGFnIjpmYWxzZSwicmVzb2x2ZXIiOnRydWUsInJlc29sdmVyX2ZsYWciOnRydWUsImtleV9jb2xvciI6dHJ1ZSwibG9nX3R5cGUiOlsiQ29uc29sZSIsIlNjcmVlbiIsIn4iXSwianVtcF9zdG9wX2Rpc3RhbmNlIjoyMDAsInByZWRpY3RfdHlwZSI6Ik9sZCIsImF1dG9idXlfb3RoZXIiOlsiVmVzdGhlbG0iLCJWZXN0IiwiVGFzZXIiLCJEZWZ1c2VyIiwifiJdLCJhbmltYXRpb24iOnRydWUsInZlbG9jaXR5X3dpbmRvdyI6ZmFsc2UsImFuaW1hdGlvbl9haXIiOiJTdGF0aWMiLCJsb2dfZ2xvd19jb2xvcl9jIjoiI0M1RDBGRkZGIiwiZGFtYWdlX2luZGljYXRvcl9tb2RlIjoiT24gQmluZCIsImRlZmVuc2l2ZV93aW5kb3dfYyI6IiNDNUQwRkZGRiIsImNyb3NzX2NvbG9yX2MiOiIjRkZGRkZGRkYiLCJhdXRvYnV5IjpmYWxzZSwiYWltdG9vbHNfdmFsdWVfYmFpbSI6MTAsImZpeF9oaWRlc2hvdHMiOnRydWUsInNwYW1tZXJzIjpbIn4iXSwidGVsZXBvcnRfa2V5IjpbMSw2NiwifiJdLCJpbmZvX3BhbmVsIjpmYWxzZSwiYXNwZWN0cmF0aW9fdmFsdWUiOjEzMywicHJlZGljdHYyIjpmYWxzZSwibG9nIjp0cnVlLCJ2ZWxvY2l0eV9zdHlsZSI6Ik1vZGVybiIsImFpbXRvb2xzX2JhaW1fc2FmZSI6dHJ1ZSwiYXV0b2J1eV9uYWRlcyI6WyJNb2xvdG92IiwiSGVncmVuYWRlIiwiU21va2UiLCJ+Il19fX0='
-
-    
-    local decode = base64.decode(link, 'base64')
-    local toTable = json.parse(decode)
-
-    table.insert(presets, { name = '*Vortx', config = base64.encode(json.stringify(toTable.config)), config2 = base64.encode(json.stringify(toTable.config2))})
-    lua_menu.config.name:set('*Default')
-
-    lua_menu.config.list:update(config_system.config_list())
-
-
-    lua_menu.config.list:update(config_system.config_list())
-end
-
-function initDatabase6()
-    if database.read(protected.database.configs) == nil then
-        database.write(protected.database.configs, {})
-    end
-
-    local link = 'eyJjb25maWcyIjpbeyJlbmFibGUiOmZhbHNlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6Ik9mZiIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0IjowLCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJPZmYiLCJib2R5X3NsaWRlciI6MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjAsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6ZmFsc2UsInlhd19kZWxheSI6NCwibW9kX2RtIjowLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJPZmYiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6MCwiYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9qaXR0ZXIyIjowLCJ5YXdfdmFsdWVfcmFuZG9tMSI6MCwieWF3X2xlZnQiOjAsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MCwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjo2LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMTIsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MCwiZGVmZW5zaXZlX3lhdyI6Ik9mZiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6MCwicGl0Y2hfdmFsdWUxIjowfSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJPZmYiLCJwaXRjaF92YWx1ZTIiOjAsImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjp0cnVlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo1LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjotMTAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6IkN1c3RvbSIsImJvZHlfc2xpZGVyIjotMSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOi05MCwicGl0Y2hfc3Bpbl92YWx1ZSI6NzIsInlhd19yYW5kb20iOjAsImZvcmNlX2RlZiI6dHJ1ZSwieWF3X2RlbGF5Ijo0LCJtb2RfZG0iOjIyLCJkZWZlbnNpdmVfdHlwZSI6IkRlZmF1bHQiLCJkZWZfbW9kX3R5cGUiOiJPZmYiLCJ5YXdfdmFsdWVfb3Bwb3NpdGUiOjAsImRlZmVuc2l2ZV95YXciOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfcmFuZG9tMiI6OTAsImJvZHlfeWF3X3R5cGUiOiJPcHBvc2l0ZSIsInlhd192YWx1ZV9qaXR0ZXIyIjo5MCwieWF3X3ZhbHVlX3JhbmRvbTEiOi05MCwieWF3X2xlZnQiOi01LCJwaXRjaF92YWx1ZSI6NzIsInBpdGNoX3ZhbHVlMSI6MH0seyJlbmFibGUiOnRydWUsInlhd190eXBlIjoiRGVsYXkiLCJtb2RfdHlwZSI6Ik9mZiIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOmZhbHNlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6MCwieWF3X3JpZ2h0Ijo0MiwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6MCwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiT2ZmIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOjAsImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjowLCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6MywibW9kX2RtIjotNiwiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiT2ZmIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjQsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6LTM3LCJkZWZfYm9keV9zbGlkZXIiOjEsImRlZmVuc2l2ZSI6dHJ1ZSwiZGVmX2JvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWUiOi00MywieWF3X3JpZ2h0IjotMywicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6OSwicGl0Y2hfc3Bpbl9zcGVlZCI6MiwiZGVmX3lhd192YWx1ZSI6MSwiZGVmZW5zaXZlX3BpdGNoIjoiQ3VzdG9tIiwiYm9keV9zbGlkZXIiOjEsInBpdGNoX3JhbmRvbV92YWx1ZTIiOi0xNywiZGVmX21vZF9kbSI6MTgwLCJ5YXdfdmFsdWVfaml0dGVyMSI6OTEsInBpdGNoX3NwaW5fdmFsdWUiOjUzLCJ5YXdfcmFuZG9tIjo1LCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJCdWlsZGVyIiwiZGVmX21vZF90eXBlIjoiQ2VudGVyIiwieWF3X3ZhbHVlX29wcG9zaXRlIjo4NywiZGVmZW5zaXZlX3lhdyI6IkppdHRlciIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiT3Bwb3NpdGUiLCJ5YXdfdmFsdWVfaml0dGVyMiI6LTkxLCJ5YXdfdmFsdWVfcmFuZG9tMSI6LTQ4LCJ5YXdfbGVmdCI6LTMwLCJwaXRjaF92YWx1ZSI6LTMyLCJwaXRjaF92YWx1ZTEiOjQ5fSx7ImVuYWJsZSI6dHJ1ZSwieWF3X3R5cGUiOiJEZWZhdWx0IiwibW9kX3R5cGUiOiJSYW5kb20iLCJwaXRjaF92YWx1ZTIiOjAsImRlZl9ib2R5X3NsaWRlciI6MCwiZGVmZW5zaXZlIjp0cnVlLCJkZWZfYm9keV95YXdfdHlwZSI6Ik9mZiIsInlhd192YWx1ZSI6LTIwLCJ5YXdfcmlnaHQiOjM5LCJwaXRjaF9yYW5kb21fdmFsdWUxIjowLCJwaXRjaF9zcGluX3NwZWVkIjowLCJkZWZfeWF3X3ZhbHVlIjowLCJkZWZlbnNpdmVfcGl0Y2giOiJDdXN0b20iLCJib2R5X3NsaWRlciI6MSwicGl0Y2hfcmFuZG9tX3ZhbHVlMiI6MCwiZGVmX21vZF9kbSI6MCwieWF3X3ZhbHVlX2ppdHRlcjEiOjAsInBpdGNoX3NwaW5fdmFsdWUiOjg5LCJ5YXdfcmFuZG9tIjowLCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjo1LCJkZWZlbnNpdmVfeWF3IjoiU3BpbiIsInlhd192YWx1ZV9yYW5kb20yIjowLCJib2R5X3lhd190eXBlIjoiSml0dGVyIiwieWF3X3ZhbHVlX2ppdHRlcjIiOjAsInlhd192YWx1ZV9yYW5kb20xIjowLCJ5YXdfbGVmdCI6LTIyLCJwaXRjaF92YWx1ZSI6LTQ1LCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6MCwiZGVmX2JvZHlfc2xpZGVyIjowLCJkZWZlbnNpdmUiOnRydWUsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjoyMiwieWF3X3JpZ2h0IjozOCwicGl0Y2hfcmFuZG9tX3ZhbHVlMSI6MCwicGl0Y2hfc3Bpbl9zcGVlZCI6NSwiZGVmX3lhd192YWx1ZSI6MCwiZGVmZW5zaXZlX3BpdGNoIjoiU3BpbiIsImJvZHlfc2xpZGVyIjoxLCJwaXRjaF9yYW5kb21fdmFsdWUyIjowLCJkZWZfbW9kX2RtIjowLCJ5YXdfdmFsdWVfaml0dGVyMSI6MCwicGl0Y2hfc3Bpbl92YWx1ZSI6MCwieWF3X3JhbmRvbSI6NiwiZm9yY2VfZGVmIjp0cnVlLCJ5YXdfZGVsYXkiOjQsIm1vZF9kbSI6LTMsImRlZmVuc2l2ZV90eXBlIjoiRGVmYXVsdCIsImRlZl9tb2RfdHlwZSI6Ik9mZiIsInlhd192YWx1ZV9vcHBvc2l0ZSI6MjIsImRlZmVuc2l2ZV95YXciOiJTcGluIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjQsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOjB9LHsiZW5hYmxlIjp0cnVlLCJ5YXdfdHlwZSI6IkRlZmF1bHQiLCJtb2RfdHlwZSI6IkNlbnRlciIsInBpdGNoX3ZhbHVlMiI6LTY5LCJkZWZfYm9keV9zbGlkZXIiOjAsImRlZmVuc2l2ZSI6ZmFsc2UsImRlZl9ib2R5X3lhd190eXBlIjoiT2ZmIiwieWF3X3ZhbHVlIjowLCJ5YXdfcmlnaHQiOjM5LCJwaXRjaF9yYW5kb21fdmFsdWUxIjotODksInBpdGNoX3NwaW5fc3BlZWQiOjAsImRlZl95YXdfdmFsdWUiOjAsImRlZmVuc2l2ZV9waXRjaCI6IkppdHRlciIsImJvZHlfc2xpZGVyIjoxLCJwaXRjaF9yYW5kb21fdmFsdWUyIjotNjksImRlZl9tb2RfZG0iOjAsInlhd192YWx1ZV9qaXR0ZXIxIjowLCJwaXRjaF9zcGluX3ZhbHVlIjowLCJ5YXdfcmFuZG9tIjowLCJmb3JjZV9kZWYiOnRydWUsInlhd19kZWxheSI6NCwibW9kX2RtIjotMywiZGVmZW5zaXZlX3R5cGUiOiJEZWZhdWx0IiwiZGVmX21vZF90eXBlIjoiT2ZmIiwieWF3X3ZhbHVlX29wcG9zaXRlIjowLCJkZWZlbnNpdmVfeWF3IjoiUmFuZG9tIiwieWF3X3ZhbHVlX3JhbmRvbTIiOjAsImJvZHlfeWF3X3R5cGUiOiJKaXR0ZXIiLCJ5YXdfdmFsdWVfaml0dGVyMiI6MCwieWF3X3ZhbHVlX3JhbmRvbTEiOjAsInlhd19sZWZ0IjotMjYsInBpdGNoX3ZhbHVlIjowLCJwaXRjaF92YWx1ZTEiOi04OX1dLCJjb25maWciOnsibWFpbiI6eyJ0YWIiOiLuh4EgQ29uZmlncyBTeXN0ZW0ifSwiY29uZmlnIjp7Imxpc3QiOjV9LCJhbnRpYWltIjp7Inlhd19iYXNlIjoiQXQgdGFyZ2V0cyIsImFkZG9ucyI6WyJBbnRpLUJydXRlZm9yY2UiLCJBbnRpIEJhY2tzdGFiIiwiU2FmZSBIZWFkIiwifiJdLCJ5YXdfZGlyZWN0aW9uIjpbIkZyZWVzdGFuZGluZyIsIk1hbnVhbCIsIkVkZ2UgWWF3IiwifiJdLCJrZXlfZm9yd2FyZCI6WzEsMCwifiJdLCJrZXlfbGVmdCI6WzEsOTAsIn4iXSwiY29uZGl0aW9uIjoiXHUwMDBiQWlyXHIiLCJzYWZlX2hlYWQiOlsiQWlyK0MgS25pZmUiLCJBaXIrQyBaZXVzIiwifiJdLCJhbnRpX2JydXRlZm9yY2VfbW9kZSI6Ik1pbmltYWwiLCJ0YWIiOiJCdWlsZGVyIiwia2V5X2ZyZWVzdGFuZCI6WzEsMTgsIn4iXSwia2V5X2VkZ2VfeWF3IjpbMSw4MCwifiJdLCJrZXlfcmlnaHQiOlsxLDY3LCJ+Il19LCJtaXNjIjp7InBlcmZvbWFuY2VfYm9vc3QiOnRydWUsInByZWRpY3RpbmQiOmZhbHNlLCJtYW51YWxfYXJyb3dzX2MiOiIjQzVEMEZGRkYiLCJkYW1hZ2VfaW5kaWNhdG9yIjp0cnVlLCJhbmltYXRpb25fYm9keV9sZWFuIjoxMDAsInRoaXJkX3BlcnNvbl92YWx1ZSI6NTEsImFuaW1hdGlvbl9hZGRvbnMiOlsiQWRqdXN0IEJvZHkgTGVhbiIsIkVhcnRocXVha2UiLCJTbW9vdGhpbmciLCJ+Il0sImFpbXRvb2xzIjp0cnVlLCJhaW10b29sc192YWx1ZV9zYWZlIjozMCwiZGVmZW5zaXZlX3N0eWxlIjoiTW9kZXJuIiwiYWltdG9vbHNfZXNwX2ZsYWdzIjp0cnVlLCJ3YXRlcm1hcmtfY29sb3IiOnRydWUsInByZWRpY3R2MmluZCI6ZmFsc2UsImZhc3RfbGFkZGVyIjp0cnVlLCJhc3BlY3RyYXRpbyI6ZmFsc2UsInByZWRpY3QiOmZhbHNlLCJkYW1hZ2VfaW5kaWNhdG9yX3N0eWxlIjoiUGl4ZWwiLCJtYW51YWxfYXJyb3dzIjp0cnVlLCJ0aGlyZF9wZXJzb24iOnRydWUsImp1bXBfc3RvcF9ob3RrZXkiOlsxLDE4LCJ+Il0sIndhdGVybWFya19zdHlsZSI6IkRlZmF1bHQiLCJqdW1wX3N0b3AiOnRydWUsImNyb3NzX2luZF9jIjoiI0M1RDBGRkZGIiwid2F0ZXJtYXJrIjp0cnVlLCJrZXlfY29sb3JfYyI6IiNGRkZGRkZGRiIsInJlc29sdmVyX3R5cGUiOiJTYWZlIiwicGluZ3Bvc2xvdyI6IkhpZ2giLCJ0ZWxlcG9ydCI6dHJ1ZSwid2F0ZXJtYXJrX2NvbG9yX2MiOiIjQzVEMEZGRkYiLCJ2ZWxvY2l0eV93aW5kb3dfYyI6IiNDNUQwRkZGRiIsInByZWRpY3Rfa2V5IjpbMSwwLCJ+Il0sImRlZmVuc2l2ZV93aW5kb3ciOnRydWUsInByZWRpY3Rfa2V5djIiOlsxLDAsIn4iXSwicGluZ3BvcyI6MSwiY3Jvc3NfY29sb3IiOnRydWUsImF1dG9idXlfc2Vjb25kIjoiRGVhZ2xlIHwgUjgiLCJjcm9zc19pbmQiOmZhbHNlLCJhdXRvYnV5X3ByaW1hcnkiOiJBV1AiLCJsb2dfaGl0X2NvbG9yX2MiOiIjQzVEMEZGRkYiLCJhbmltYXRpb25fZ3JvdW5kIjoiU3RhdGljIiwibG9nX21pc3NfY29sb3JfYyI6IiM1RDVENURGRiIsImluZm9fcGFuZWxfYyI6IiNDNUQwRkZGRiIsImFpbXRvb2xzX3ByaW9yaXR5Ijp0cnVlLCJwcmVkaWN0X2ZsYWciOmZhbHNlLCJyZXNvbHZlciI6dHJ1ZSwicmVzb2x2ZXJfZmxhZyI6dHJ1ZSwia2V5X2NvbG9yIjp0cnVlLCJsb2dfdHlwZSI6WyJDb25zb2xlIiwiU2NyZWVuIiwifiJdLCJqdW1wX3N0b3BfZGlzdGFuY2UiOjIwMCwicHJlZGljdF90eXBlIjoiT2xkIiwiYXV0b2J1eV9vdGhlciI6WyJWZXN0aGVsbSIsIlZlc3QiLCJUYXNlciIsIkRlZnVzZXIiLCJ+Il0sImFuaW1hdGlvbiI6dHJ1ZSwidmVsb2NpdHlfd2luZG93Ijp0cnVlLCJhbmltYXRpb25fYWlyIjoiU3RhdGljIiwibG9nX2dsb3dfY29sb3JfYyI6IiNDNUQwRkZGRiIsImRhbWFnZV9pbmRpY2F0b3JfbW9kZSI6Ik9uIEJpbmQiLCJkZWZlbnNpdmVfd2luZG93X2MiOiIjQzVEMEZGRkYiLCJjcm9zc19jb2xvcl9jIjoiI0ZGRkZGRkZGIiwiYXV0b2J1eSI6ZmFsc2UsImFpbXRvb2xzX3ZhbHVlX2JhaW0iOjIwLCJmaXhfaGlkZXNob3RzIjp0cnVlLCJzcGFtbWVycyI6WyJ+Il0sInRlbGVwb3J0X2tleSI6WzEsNjYsIn4iXSwiaW5mb19wYW5lbCI6ZmFsc2UsImFzcGVjdHJhdGlvX3ZhbHVlIjowLCJwcmVkaWN0djIiOmZhbHNlLCJsb2ciOnRydWUsInZlbG9jaXR5X3N0eWxlIjoiTW9kZXJuIiwiYWltdG9vbHNfYmFpbV9zYWZlIjp0cnVlLCJhdXRvYnV5X25hZGVzIjpbIk1vbG90b3YiLCJIZWdyZW5hZGUiLCJTbW9rZSIsIn4iXX19fQ=='
-
-    
-    local decode = base64.decode(link, 'base64')
-    local toTable = json.parse(decode)
-
-    table.insert(presets, { name = '*shxmura defensive', config = base64.encode(json.stringify(toTable.config)), config2 = base64.encode(json.stringify(toTable.config2))})
-    lua_menu.config.name:set('*shxmura defensive')
-
-    lua_menu.config.list:update(config_system.config_list())
-
-
-    lua_menu.config.list:update(config_system.config_list())
-end
-
-
-
-initDatabase1()
-initDatabase2()
-initDatabase3()
-initDatabase4()
-initDatabase5()
-initDatabase6()
-
-
-
-    local function update_menu()
-        local aA = {
-            {200,200,200, 255 * math.abs(1 * math.cos(2 * math.pi * globals.curtime()/4 + 80 / 30))},
-            {200,200,200, 255 * math.abs(1 * math.cos(2 * math.pi * globals.curtime()/4 + 75 / 30))},
-            {200,200,200, 255 * math.abs(1 * math.cos(2 * math.pi * globals.curtime()/4 + 70 / 30))},
-            {200,200,200, 255 * math.abs(1 * math.cos(2 * math.pi * globals.curtime()/4 + 65 / 30))},
-            {200,200,200, 255 * math.abs(1 * math.cos(2 * math.pi * globals.curtime()/4 + 60 / 30))},
-            {200,200,200, 255 * math.abs(1 * math.cos(2 * math.pi * globals.curtime()/4 + 55 / 30))},
-            {200,200,200, 255 * math.abs(1 * math.cos(2 * math.pi * globals.curtime()/4 + 50 / 30))},
-        }
-    end
-
-    client.set_event_callback("setup_command", function(cmd)
-        aa_setup(cmd)
-        handle_defensive_v2(cmd)
-        apply_anti_bruteforce()
-    end)
-
-
-    client.set_event_callback('pre_render', function()
-        if lua_menu.misc.animation:get() then
-            anim_breaker()
-        end
-        if lua_menu.misc.animation_addons:get("Adjust Body Lean") then
-            local lp = entity.get_local_player()
-            if not lp then return end
-            if not entity.is_alive(lp) then return end
-
-            local self_index = c_entity.new(lp)
-            local self_anim_state = self_index:get_anim_state()
-            local body_lean_value = lua_menu.misc.animation_body_lean:get()
-
-            local self_anim_overlay = self_index:get_anim_overlay(12)
-
-            local x_velocity = entity.get_prop(lp, 'm_vecVelocity[0]')
-            if math.abs(x_velocity) >= 3 then
-            self_anim_overlay.weight = body_lean_value / 100
-        elseif lua_menu.misc.animation_addons:get("Earthquake") then
-            local lp = entity.get_local_player()
-            if not lp then return end
-            if not entity.is_alive(lp) then return end
-
-            local self_index = c_entity.new(lp)
-            local self_anim_state = self_index:get_anim_state()
-            local body_lean_value = lua_menu.misc.animation_body_lean:get()
-
-            local self_anim_overlay = self_index:get_anim_overlay(12)
-
-            self_anim_overlay.weight = client.random_float(0, 1)
-end
-end
-end)
-
-    client.set_event_callback('paint_ui', function()
-        hide_original_menu(false)
-        update_menu()
-    end)
-
-    client.set_event_callback('paint', function()
-        if lua_menu.misc.spammers:get("Clantag") then
-            clantag_en()
-        end
-        if not entity.is_alive(entity.get_local_player()) then return end
-        if lua_menu.misc.cross_ind:get() then
-            screen_indicator()
-        end
-        thirdperson(lua_menu.misc.third_person:get() and lua_menu.misc.third_person_value:get() or nil)
-        aspectratio(lua_menu.misc.aspectratio:get() and lua_menu.misc.aspectratio_value:get()/100 or nil)
-        if lua_menu.misc.velocity_window:get() then
-            ind.velocity_ind()
-        end
-        ragebot_logs()
-        if lua_menu.misc.info_panel:get() then
-            ind.info_panel()
-        end
-        manual_arrows()
-        fixhideshots()
-        unsafecharge()
-        damage_indicator()
-        ind.watermark()
-
-
-    end)
-
-
-    client.set_event_callback('shutdown', function()
-        hide_original_menu(true)
-        thirdperson(150)
-        aspectratio(0)
-        expres.restore()
-    end)
-    client.set_event_callback('run_command', function(cmd)
-        defensive_check.last_cmd = cmd.command_number
-        local lp = entity.get_local_player()
-
-        -- local tickbase = entity.get_prop(lp, "m_nTickBase")
-        -- if is_defensive_active(lp) then
-        -- print("Defensive active ", tickbase)
+local function aimtools_update()
+    if not menu.misc.aimtools_enable:get() then 
+        -- if menu.misc.debug:get() then
+        --     print("Aimtools disabled")
         -- end
-    end)
-
-    client.set_event_callback('round_prestart', function()
-        logs = {}
-        if lua_menu.misc.log_type:get("Screen") then
-            renderer.log("Anti-Aim Data Resetted")
+        return 
+    end
+    
+    -- if menu.misc.debug:get() then
+    --     print("Aimtools function called")
+    -- end
+    
+    local lp = entity.get_local_player()
+    if not lp or not entity.is_alive(lp) then 
+        -- if menu.misc.debug:get() then
+        --     print("Local player not alive")
+        -- end
+        return 
+    end
+    
+    local weapon_ent = entity.get_player_weapon(lp)
+    if not weapon_ent then 
+        -- if menu.misc.debug:get() then
+        --     print("No weapon entity")
+        -- end
+        return 
+    end
+    
+    local weapon_idx = entity.get_prop(weapon_ent, "m_iItemDefinitionIndex")
+    local weapon_name = csgo_weapons[weapon_idx] and csgo_weapons[weapon_idx].name or "Unknown"
+    
+    -- Автоматический выбор оружия в aimtools
+    local current_weapon_selection = menu.misc.aimtools.weapon:get()
+    local should_update_weapon = false
+    
+    if string.find(weapon_name, "Desert Eagle") and current_weapon_selection ~= "Desert Eagle" then
+        menu.misc.aimtools.weapon:set("Desert Eagle")
+        should_update_weapon = true
+    elseif string.find(weapon_name, "SSG 08") and current_weapon_selection ~= "SSG 08" then
+        menu.misc.aimtools.weapon:set("SSG 08")
+        should_update_weapon = true
+    elseif string.find(weapon_name, "AWP") and current_weapon_selection ~= "AWP" then
+        menu.misc.aimtools.weapon:set("AWP")
+        should_update_weapon = true
+    end
+    
+    -- Если сменилось оружие, сбрасываем все настройки aimtools
+    if should_update_weapon then
+        local players = entity.get_players(true)
+        for i = 1, #players do
+            local player_index = players[i]
+            if entity.is_alive(player_index) then
+                plist.set(player_index, "Override Prefer safe point", "-")
+                plist.set(player_index, "Override Prefer body aim", "-")
+            end
         end
-    end)
+        
+        -- if menu.misc.debug:get() then
+        --     print("Auto-selected weapon:", weapon_name)
+        --     print("Reset all aimtools settings")
+        -- end
+    end
+    
+    -- if menu.misc.debug:get() then
+    --     print("Current weapon:", weapon_name)
+    --     print("Selected weapon:", menu.misc.aimtools.weapon:get())
+    -- end
+    
+    local players = entity.get_players(true)
+    
+    -- Определяем, какое оружие выбрано и получаем соответствующие настройки
+    local selected_weapon = menu.misc.aimtools.weapon:get()
+    local weapon_settings = nil
+    
+    if selected_weapon == "Desert Eagle" then
+        weapon_settings = menu.misc.aimtools.deagle
+    elseif selected_weapon == "SSG 08" then
+        weapon_settings = menu.misc.aimtools.ssg08
+    elseif selected_weapon == "AWP" then
+        weapon_settings = menu.misc.aimtools.awp
+    end
+    
+    if not weapon_settings then 
+        if menu.misc.debug:get() then
+            print("No weapon settings found")
+        end
+        return 
+    end
+    
+    -- Проверяем, соответствует ли текущее оружие выбранному
+    local is_weapon_selected = string.find(weapon_name, selected_weapon)
+    if not is_weapon_selected then 
+        -- if menu.misc.debug:get() then
+        --     print("Weapon not selected:", weapon_name, "!=", selected_weapon)
+        -- end
+        -- Reset all players' aimtools settings when weapon doesn't match
+        for i = 1, #players do
+            local player_index = players[i]
+            if entity.is_alive(player_index) then
+                plist.set(player_index, "Override Prefer safe point", "-")
+                plist.set(player_index, "Override Prefer body aim", "-")
+            end
+        end
+        return 
+    end
+    
+    -- if menu.misc.debug:get() then
+    --     print("Processing players for weapon:", selected_weapon)
+    -- end
+    
+    for i = 1, #players do
+        local player_index = players[i]
+        if not entity.is_alive(player_index) then 
+            goto continue 
+        end
+        
+        local enemy_health = entity.get_prop(player_index, "m_iHealth")
+        local enemy_armor = entity.get_prop(player_index, "m_ArmorValue")
+        local local_origin = vector(entity.get_prop(lp, "m_vecOrigin"))
+        local enemy_origin = vector(entity.get_prop(player_index, "m_vecOrigin"))
+        local distance = local_origin:dist(enemy_origin)
+        
+        local should_override = false
+        
+        local stomach_damage = calculate_damage_to_stomach(player_index)
 
-    client.set_event_callback("player_connect_full", function(e)
-    local ent = client.userid_to_entindex(e.userid)
-    if ent == entity.get_local_player() then
-        breaker.cmd = 0
-        breaker.defensive = 0
-        breaker.defensive_check = 0
+        -- Mode 1: "If HP lower than X"
+        if weapon_settings.mode1:get("If HP lower than X") then
+            local hp_threshold = weapon_settings.ifhp:get()
+            if enemy_health <= hp_threshold then
+                should_override = true
+            end
+        end
+        
+        -- Mode 2: "If lethal"
+        if weapon_settings.mode1:get("If lethal") then
+            -- Добавляем проверку на минимальный урон
+            if stomach_damage > 0 and enemy_health <= stomach_damage then
+                should_override = true
+            end
+        end
+        
+        -- Отладочная информация (можно убрать после проверки)
+        if menu.misc.debug:get() then
+            print(string.format("Weapon: %s, Player %d: HP=%d, Armor=%d, Distance=%.1f, StomachDMG=%.1f, Override=%s", 
+                weapon_name, player_index, enemy_health, enemy_armor, distance, 
+                weapon_settings.mode1:get("If lethal") and calculate_damage_to_stomach(player_index) or 0,
+                should_override and "YES" or "NO"))
+        end
+        
+        if should_override then
+            -- Apply overrides based on mode2 selection
+            if weapon_settings.mode2:get("Force Safe Point") then
+                plist.set(player_index, "Override Prefer safe point", "Force")
+            elseif weapon_settings.mode2:get("Prefer Safe Point") then
+                plist.set(player_index, "Override Prefer safe point", "On")
+            elseif weapon_settings.mode2:get("Force Body Aim") then
+                plist.set(player_index, "Override Prefer body aim", "Force")
+            elseif weapon_settings.mode2:get("Prefer Body Aim") then
+                plist.set(player_index, "Override Prefer body aim", "On")
+            end
+        else
+            -- Reset overrides if conditions not met
+            plist.set(player_index, "Override Prefer safe point", "-")
+            plist.set(player_index, "Override Prefer body aim", "-")
+        end
+        
+        ::continue::
+    end
+end
+
+client.set_event_callback("aim_fire", aim_fire)
+client.set_event_callback("aim_miss", aim_miss)
+client.set_event_callback("aim_hit", aim_hit)
+
+-- Add aimtools update callback
+client.set_event_callback("paint", aimtools_update)
+client.set_event_callback("paint", resolver_update)
+
+client.set_event_callback('paint', function()
+    if not menu.misc.resolver:get() or not entity.is_alive(entity.get_local_player()) then return end
+    
+    local screen_width, screen_height = client.screen_size()
+    local center_y = screen_height / 3.2
+    local y_offset = 0
+
+    local players = entity.get_players(true)
+    local target = client.current_threat()
+    
+    if target and entity.is_alive(target) then
+        local body_yaw_newmethod_get_sda = math.floor(entity.get_prop(target, 'm_flPoseParameter', 11) * 120 - 60)
+        
+        local desync_amount = adata.get_desync(2)
+        
+        for i = 1, #players do
+            local player_index = players[i]
+            if entity.is_alive(player_index) then      
+                renderer.text(25, center_y + y_offset, 255, 255, 255, 255, 'b', 0, 'Desync new method: ' .. body_yaw_newmethod_get_sda .. '°')
+                renderer.text(25, center_y + y_offset + 15, 255, 255, 255, 255, 'b', 0, 'Desync old method: ' .. desync_amount .. '°')
+            end
+        end
     end
 end)
-
-client.set_event_callback("net_update_end", function()
-if lua_menu.misc.spammers:get("Clantag") then
-        clantag_en()
-    end
-end)
-
-client.set_event_callback("player_spawn", function(e)
-    autobuy(e)
-end)
-
-client.set_event_callback('setup_command', function(e)
-    auto_tp(e)
-end)
-
-local r, g, b = lua_menu.misc.log_glow_color:get_color()
-local notify=(function()local b=vector;local c=function(d,b,c)return d+(b-d)*c end;local e=function()return b(client.screen_size())end;local f=function(d,...)local c={...}local c=table.concat(c,"")return b(renderer.measure_text(d,c))end;local g={notifications={bottom={}},max={bottom=6}}g.__index=g;g.new_bottom=function(h,i,j,...)table.insert(g.notifications.bottom,{started=false,instance=setmetatable({active=false,timeout=5,color={["r"]=h,["g"]=i,["b"]=j,a=0},x=e().x/2,y=e().y,text=...},g)})end;function g:handler()local d=0;local b=0;for d,b in pairs(g.notifications.bottom)do if not b.instance.active and b.started then table.remove(g.notifications.bottom,d)end end;for d=1,#g.notifications.bottom do if g.notifications.bottom[d].instance.active then b=b+1 end end;for c,e in pairs(g.notifications.bottom)do if c>g.max.bottom then return end;if e.instance.active then e.instance:render_bottom(d,b)d=d+1 end;if not e.started then e.instance:start()e.started=true end end end;function g:start()self.active=true;self.delay=globals.realtime()+self.timeout end;function g:get_text()local d=""for b,b in pairs(self.text)do local c=f("",b[1])local c,e,f=255,255,255;if b[2]then c,e,f=255, 255, 255 end;d=d..("\a%02x%02x%02x%02x%s"):format(c,e,f,self.color.a,b[1])end;return d end;local k=(function()local d={}d.rec=function(d,b,c,e,f,g,k,l,m)m=math.min(d/2,b/2,m)renderer.rectangle(d,b+m,c,e-m*2,f,g,k,l)renderer.rectangle(d+m,b,c-m*2,m,f,g,k,l)renderer.rectangle(d+m,b+e-m,c-m*2,m,f,g,k,l)renderer.circle(d+m,b+m,f,g,k,l,m,180,.25)renderer.circle(d-m+c,b+m,f,g,k,l,m,90,.25)renderer.circle(d-m+c,b-m+e,f,g,k,l,m,0,.25)renderer.circle(d+m,b-m+e,f,g,k,l,m,-90,.25)end;d.rec_outline=function(d,b,c,e,f,g,k,l,m,n)m=math.min(c/2,e/2,m)if m==1 then renderer.rectangle(d,b,c,n,f,g,k,l)renderer.rectangle(d,b+e-n,c,n,f,g,k,l)else renderer.rectangle(d+m,b,c-m*2,n,f,g,k,l)renderer.rectangle(d+m,b+e-n,c-m*2,n,f,g,k,l)renderer.rectangle(d,b+m,n,e-m*2,f,g,k,l)renderer.rectangle(d+c-n,b+m,n,e-m*2,f,g,k,l)renderer.circle_outline(d+m,b+m,f,g,k,l,m,180,.25,n)renderer.circle_outline(d+m,b+e-m,f,g,k,l,m,90,.25,n)renderer.circle_outline(d+c-m,b+m,f,g,k,l,m,-90,.25,n)renderer.circle_outline(d+c-m,b+e-m,f,g,k,l,m,0,.25,n)end end;d.glow_module_notify=function(b,c,e,f,g,k,l,m,n,o,p,q,r,s,s)local t=1;local u=1;if s then d.rec(b,c,e,f,l,m,n,o,k)end;for l=0,g do local m=o/2*(l/g)^3;d.rec_outline(b+(l-g-u)*t,c+(l-g-u)*t,e-(l-g-u)*t*2,f-(l-g-u)*t*2,p,q,r,m/1.5,k+t*(g-l+u),t)end end;return d end)()function g:render_bottom(g,l)local e=e()local m=6;local n="     "..self:get_text()local f=f("",n)local o=8;local p=5;local q=0+m+f.x;local q,r=q+p*2,12+10+1;local s,t=self.x-q/2,math.ceil(self.y-40+.4)local u=globals.frametime()if globals.realtime()<self.delay then self.y=c(self.y,e.y-45-(l-g)*r*1.4,u*7)self.color.a=c(self.color.a,255,u*2)else self.y=c(self.y,self.y-10,u*15)self.color.a=c(self.color.a,0,u*20)if self.color.a<=1 then self.active=false end end;local c,e,g,l=self.color.r,self.color.g,self.color.b,self.color.a;k.glow_module_notify(s,t,q,r,15,o,25,25,25,l,255, 255, 255,l,true)local k=p+2;k=k+0+m;--
-renderer.text(s+k/4,t+r/2-f.y/2,255,255,255,255,"M",nil,n)end;client.set_event_callback("paint_ui",function()g:handler()end)return g end)()
-
-client.delay_call(0.2, function()
-        notify.new_bottom(255, 255, 255, { { 'Loading' }, { " ... ", true }, })
-        client.delay_call(
-            1.8,
-            function()
-                notify.new_bottom(255, 255, 255, { { 'FineBit' }, { " [Source] ", true }, })
-            end)
-        end)
