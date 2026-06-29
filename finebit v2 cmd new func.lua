@@ -1935,6 +1935,8 @@ for i = 1, (#lua.conds - 1) do
         yaw_right = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Yaw-add right", -180, 180, 0),
         yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Yaw", {"Center", "Slow", "Advanced skitter"}),
         yaw_center = pui.slider("AA", "Anti-aimbot angles", "\n" .. "\a00000000" .. lua.conds[i] .. "Yaw", -180, 180, 0),
+        xway_ways = pui.slider("AA", "Anti-aimbot angles", dobavok .. "X-Way ways", 3, 10, 3),
+        xway_jitter = pui.slider("AA", "Anti-aimbot angles", dobavok .. "X-Way jitter", -90, 90, 0, 1, "°"),
         yaw_randomize = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Randomize", 0, 100, 0, 1, "%"),
         double_tick_update = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Double tick-update"),
         tick_update = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Tick-update", 0, 14, 2),
@@ -1971,7 +1973,9 @@ for i = 1, (#lua.conds - 1) do
     menu.builder[i].double_tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"})
     menu.builder[i].tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"})
     menu.builder[i].tick_update_second:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"}, menu.builder[i].double_tick_update)
-    menu.builder[i].yaw_center:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Off", true})
+    menu.builder[i].yaw_center:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Off", true}, {menu.builder[i].yaw, "Advanced skitter", true})
+    menu.builder[i].xway_ways:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Advanced skitter"})
+    menu.builder[i].xway_jitter:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Advanced skitter"})
     menu.builder[i].yaw_randomize:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Off", true})
     menu.builder[i].yaw_add:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
     menu.builder[i].yaw_left:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw_add, "Left & right"})
@@ -2296,6 +2300,7 @@ local ram = {
     last_sim_time = 0,
     tick_def_off = 0,
     spin = 0,
+    xway_current = 1,
 
     defensive_work = false,
     pitch_min = -45,
@@ -2711,6 +2716,13 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
             else
                 ram.jitter = not ram.jitter
             end
+            if tab.yaw:get() == "Advanced skitter" then
+                ram.xway_current = (ram.xway_current or 1) + 1
+                local ways_limit = tab.xway_ways and tab.xway_ways:get() or 3
+                if ram.xway_current > ways_limit then
+                    ram.xway_current = 1
+                end
+            end
         end
         if ram.jitter ~= ram.anti_aim.jitter_update then
             ram.anti_aim.random_add = client.random_int(tab.yaw_randomize:get() * -0.5, tab.yaw_randomize:get() * 0.5)
@@ -2774,7 +2786,21 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
                     ram.anti_aim.add = 0
                 end
                 if tab.yaw:get() == "Advanced skitter" then
-                    ram.anti_aim.yaw = tab.yaw_default:get() + client.random_int(math.min(tab.yaw_center:get() - (tab.yaw_center:get() * 2)), tab.yaw_center:get()) + ram.anti_aim.random_add
+                    -- ram.anti_aim.yaw = tab.yaw_default:get() + client.random_int(math.min(tab.yaw_center:get() - (tab.yaw_center:get() * 2)), tab.yaw_center:get()) + ram.anti_aim.random_add
+                    local ways_count = tab.xway_ways:get()
+                    local spread = tab.xway_jitter:get()
+                    local xway_val = 0
+                    if ways_count > 1 then
+                        local way_index = ram.xway_current or 1
+                        if way_index > ways_count then
+                            way_index = 1
+                        end
+                        local total_range = spread * 2
+                        local step_size = total_range / (ways_count - 1)
+                        xway_val = -spread + (step_size * (way_index - 1))
+                    end
+                    local xway_sign = (not ram.jitter) and 1 or -1
+                    ram.anti_aim.yaw = tab.yaw_default:get() + (xway_val * xway_sign) + ram.anti_aim.random_add
                 else
                     ram.anti_aim.yaw = tab.yaw_default:get() + (ram.jitter and tab.yaw_center:get() / 2 or tab.yaw_center:get() / -2) + ram.anti_aim.random_add
                 end
