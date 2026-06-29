@@ -1229,6 +1229,7 @@ end
 local pui = setmetatable(pui, pui_mt)
 
 local vector = require('vector')
+local ffi = require("ffi")
 local clipboard = require("gamesense/clipboard")
 local base64 = require("gamesense/base64")
 local adata = require("gamesense/antiaim_funcs")
@@ -1240,15 +1241,15 @@ local gratio = 1.6180339887
 math.clamp = function (x, a, b) if a > x then return a elseif b < x then return b else return x end end
 math.lerp = function (a, b, w)  return a + (b - a) * w  end
 
-if(database.read("peremogaboiii.base") == nil) then
+if(database.read("ZOV6667771337.base") == nil) then
     local base = {
         name = {"empty config"},
         cfg = {""}
     }
-    database.write("peremogaboiii.base", base)
+    database.write("ZOV6667771337.base", base)
 end
 
-local base = database.read("peremogaboiii.base")
+local base = database.read("ZOV6667771337.base")
 
 local ref = {
     aimbot = pui.reference('RAGE', 'Aimbot', 'Enabled'),
@@ -1444,7 +1445,6 @@ local menu = {
 
     mode = pui.combobox("AA", "Anti-aimbot angles", "Mode", {"Builder", "Preset"}),
     state = pui.combobox("AA", "Anti-aimbot angles", "State", lua.conds),
-    preset_list = pui.listbox("AA", "Anti-aimbot angles", "Preset", {"Test", "Chester's Cider"}),
     builder = {},
     aa_options = {
         yaw_base = pui.checkbox("AA", "Fake lag", "At target"),
@@ -1518,6 +1518,10 @@ local menu = {
         },
         animfix = pui.multiselect("AA", "Anti-aimbot angles", "Animbreakers!", {"Legs", "Jumping", "Dirty sprite"}),
         debug = pui.checkbox("AA", "Anti-aimbot angles", "Developer mode"),
+        duck_peek_assist_fix = pui.checkbox("AA", "Anti-aimbot angles", "Crouch with duck peek assist"),
+        auto_exploit = pui.checkbox("AA", "Anti-aimbot angles", "Auto exploit switch"),
+        auto_exploit_states = pui.multiselect("AA", "Anti-aimbot angles", "\nAuto exploit states", { "Standing", "Walking", "Crouching", "Sneaking" }),
+        auto_exploit_avoid = pui.multiselect("AA", "Anti-aimbot angles", "Auto exploit avoid", { "Pistols", "Desert Eagle", "Auto snipers", "Desert Eagle + Crouch" }),
     },
     cfg = {
         list = pui.listbox("AA", "Anti-aimbot angles", "Profiles", base.name),
@@ -1608,16 +1612,6 @@ menu.misc.viewmodel.x:set_callback(function() viewmodel_set() end)
 menu.misc.viewmodel.y:set_callback(function() viewmodel_set() end)
 menu.misc.viewmodel.z:set_callback(function() viewmodel_set() end)
 menu.misc.viewmodel.fov:set_callback(function() viewmodel_set() end)
-
--- Callback для применения пресетов
-menu.preset_list:set_callback(function()
-    local selected_preset = menu.preset_list:get()
-    if selected_preset == 0 then -- Test preset
-        apply_test_preset()
-    elseif selected_preset == 1 then -- Chester's Cider preset
-        apply_chester_cider_preset()
-    end
-end)
 
 function fps_opt()
     for i = 1, #fps_cvar_values do
@@ -1840,7 +1834,6 @@ local visuals = {menu.tab, "-- visuals & miscellaneous"}
 
 menu.mode:depend(en, menutab, aa_options)
 menu.state:depend(en, menutab, aa_options, {menu.mode, "Builder"})
-menu.preset_list:depend(en, menutab, aa_options, {menu.mode, "Preset"})
 
 menu.aa_options.yaw_base:depend(en, {menu.tab_fl, "-- binds"})
 menu.aa_options.hide_yaw_override:depend(en, {menu.tab_fl, "-- binds"})
@@ -1886,6 +1879,10 @@ menu.misc.viewmodel.x:depend(en, misctab, menu.misc.viewmodel_enable)
 menu.misc.viewmodel.y:depend(en, misctab, menu.misc.viewmodel_enable)
 menu.misc.viewmodel.z:depend(en, misctab, menu.misc.viewmodel_enable)
 menu.misc.viewmodel.fov:depend(en, misctab, menu.misc.viewmodel_enable)
+menu.misc.duck_peek_assist_fix:depend(en, misctab)
+menu.misc.auto_exploit:depend(en, misctab)
+menu.misc.auto_exploit_states:depend(en, misctab, menu.misc.auto_exploit)
+menu.misc.auto_exploit_avoid:depend(en, misctab, menu.misc.auto_exploit)
 
 menu.aa_options.defensive:set_visible(false)
 menu.aa_options.static_on_def:set_visible(false)
@@ -2016,7 +2013,7 @@ function save()
         base.name[val] = nameindabox
     end
     base.cfg[val] = indacfg:save()
-    database.write("peremogaboiii.base", base)
+    database.write("ZOV6667771337.base", base)
     menu.cfg.list:update(base.name)
     print("[preset] profile saved")
 end
@@ -2031,7 +2028,7 @@ function create()
 
     table.insert(base.name, name)
     table.insert(base.cfg, indacfg:save())
-    database.write("peremogaboiii.base", base)
+    database.write("ZOV6667771337.base", base)
     menu.cfg.list:update(base.name)
     print("[preset] profile created")
 end
@@ -2043,7 +2040,7 @@ function delete()
         table.remove(base.cfg, val)
     end
 
-    database.write("peremogaboiii.base", base)
+    database.write("ZOV6667771337.base", base)
     menu.cfg.list:update(base.name)
     print("[preset] profile deleted")
 end
@@ -3628,6 +3625,230 @@ end
 
 client.set_event_callback("round_prestart", reset)
 
+local duck_peek_fix = {}
+do
+    local saved_fd_state = nil
+    local modified = false
+    local last_enabled = false
+    local hotkey_modes = { [0] = "Always on", [1] = "On hotkey", [2] = "Toggle", [3] = "Off hotkey" }
+
+    function duck_peek_fix.run(cmd)
+        if not menu.misc.duck_peek_assist_fix:get() then
+            if last_enabled and saved_fd_state then
+                ui.set(ref.fakeduck.ref, unpack(saved_fd_state))
+                saved_fd_state = nil
+                modified = false
+                last_enabled = false
+            end
+            return
+        end
+        last_enabled = true
+
+        local lp = entity.get_local_player()
+        if (not lp) or (not entity.is_alive(lp)) then return end
+
+        local ducking = (cmd.in_duck == 1) and (entity.get_prop(lp, "m_flDuckAmount") > 0.8)
+        
+        local active = ui.get(ref.fakeduck.ref)
+        local mode, key
+        if ui.get_hotkey ~= nil then
+            mode, key = ui.get_hotkey(ref.fakeduck.ref)
+        else
+            local _, m, k = ui.get(ref.fakeduck.ref)
+            mode = m
+            key = k
+        end
+
+        if ducking and active and (not modified) then
+            saved_fd_state = { hotkey_modes[mode] or "Off hotkey", key }
+            local new_mode = (((mode == 2) or (mode == 3)) and "On hotkey") or "Off hotkey"
+            ui.set(ref.fakeduck.ref, new_mode)
+            modified = true
+        elseif (not ducking) and modified and saved_fd_state then
+            ui.set(ref.fakeduck.ref, unpack(saved_fd_state))
+            saved_fd_state = nil
+            modified = false
+        end
+    end
+end
+
+local auto_exploit = {}
+do
+    local last_enabled = false
+    local saved_dt_state = nil
+
+    local hotkey_modes = { [0] = "Always on", [1] = "On hotkey", [2] = "Toggle", [3] = "Off hotkey" }
+    local saved_states = {}
+    local forced_states = {}
+
+    local function get_hotkey_state(item)
+        if not item or not item.hotkey or not item.hotkey.ref then
+            return nil
+        end
+        local mode, key
+        if ui.get_hotkey ~= nil then
+            mode, key = ui.get_hotkey(item.hotkey.ref)
+        else
+            local _, m, k = ui.get(item.hotkey.ref)
+            mode = m
+            key = k
+        end
+        return { hotkey_modes[mode] or "Off hotkey", key }
+    end
+
+    local function restore_hotkey(item, id)
+        if forced_states[id] and saved_states[id] then
+            item:set_hotkey(unpack(saved_states[id]))
+            saved_states[id] = nil
+            forced_states[id] = false
+        end
+    end
+
+    local function force_hotkey(item, id)
+        if not forced_states[id] then
+            local state = get_hotkey_state(item)
+            if state then
+                saved_states[id] = state
+                item:set_hotkey("Always on")
+                forced_states[id] = true
+            end
+        end
+    end
+
+    local function table_contains(tbl, value)
+        for _, v in ipairs(tbl) do
+            if v == value then return true end
+        end
+        return false
+    end
+
+    local function is_in_fake_lag(cmd)
+        local choked = cmd and cmd.chokedcommands or 0
+        if ref.fl_enable:get() then
+            if ref.fl_limit:get() > 1 then
+                local dt = (saved_dt_state ~= nil and saved_dt_state or ref.dt:get()) and ref.dt:get_hotkey()
+                local osaa = ref.hs:get() and ref.hs:get_hotkey()
+                local not_fd = not ref.fakeduck:get()
+                if dt and not_fd then
+                    if choked > ref.dt_limit:get() then
+                        return true
+                    end
+                elseif osaa and not_fd then
+                    if choked > 1 then
+                        return true
+                    end
+                elseif choked ~= nil then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    local function get_state_name_local(lp)
+        local flags = entity.get_prop(lp, "m_fFlags") or 0
+        local on_ground = bit.band(flags, 1) ~= 0
+        local speed = player.get_velocity(lp)
+        if not on_ground then
+            return "In air"
+        end
+        local fd = ref.fakeduck:get()
+        local in_duck = player.in_duck(lp) or fd
+        if in_duck then
+            if speed > 10 then
+                return "Sneaking"
+            else
+                return "Crouching"
+            end
+        else
+            if speed > 10 then
+                local slow_motion_active = ref.slow_motion and ref.slow_motion:get() and ref.slow_motion:get_hotkey()
+                if slow_motion_active then
+                    return "Walking"
+                else
+                    return "Moving"
+                end
+            else
+                return "Standing"
+            end
+        end
+    end
+
+    local function get_weapon_category(lp)
+        local active_weapon = entity.get_prop(lp, "m_hActiveWeapon")
+        if not active_weapon then return "None" end
+        local weapon_idx = entity.get_prop(active_weapon, "m_iItemDefinitionIndex")
+        if not weapon_idx then return "None" end
+        local info = csgo_weapons[weapon_idx]
+        if not info then return "None" end
+        local name = info.console_name or ""
+        name = name:gsub("weapon_", ""):gsub("_.*", "")
+        
+        if name == "deagle" then
+            return "Deagle"
+        end
+        if name == "g3sg1" or name == "scar20" then
+            return "Auto snipers"
+        end
+        if info.type == 1 then
+            return "Pistols"
+        end
+        return "Other"
+    end
+
+    local function should_exploit(cmd, lp)
+        if is_in_fake_lag(cmd) then return false end
+        local states = menu.misc.auto_exploit_states:get() or {}
+        local state = get_state_name_local(lp)
+        if not table_contains(states, state) then return false end
+
+        local avoid = menu.misc.auto_exploit_avoid:get() or {}
+        local weapon = get_weapon_category(lp)
+        if table_contains(avoid, "Pistols") and (weapon == "Pistols") then return false end
+        if table_contains(avoid, "Desert Eagle") and (weapon == "Deagle") then return false end
+        if table_contains(avoid, "Auto snipers") and (weapon == "Auto snipers") then return false end
+        if table_contains(avoid, "Desert Eagle + Crouch") and (weapon == "Deagle") and ((state == "Crouching") or (state == "Sneaking")) then return false end
+        return true
+    end
+
+    function auto_exploit.run(cmd)
+        if not menu.misc.auto_exploit:get() then
+            if last_enabled then
+                if saved_dt_state ~= nil then
+                    ref.dt:override()
+                    ref.dt:set(saved_dt_state)
+                    saved_dt_state = nil
+                end
+                restore_hotkey(ref.hs, "on_shot")
+                restore_hotkey(ref.dt, "double_tap")
+                last_enabled = false
+            end
+            return
+        end
+        last_enabled = true
+
+        local lp = entity.get_local_player()
+        if not lp or not entity.is_alive(lp) then return end
+
+        if should_exploit(cmd, lp) then
+            if saved_dt_state == nil then
+                saved_dt_state = ref.dt:get()
+            end
+            ref.dt:override(false)
+            restore_hotkey(ref.dt, "double_tap")
+            force_hotkey(ref.hs, "on_shot")
+        else
+            if saved_dt_state ~= nil then
+                ref.dt:override()
+                ref.dt:set(saved_dt_state)
+                saved_dt_state = nil
+            end
+            restore_hotkey(ref.hs, "on_shot")
+            restore_hotkey(ref.dt, "double_tap")
+        end
+    end
+end
+
 function setup_commanding(cmd)
     local lp = entity.get_local_player()
     update_data(cmd, lp, client.current_threat())
@@ -3659,6 +3880,8 @@ function setup_commanding(cmd)
     builder(cmd, state, tab, avoid_backstabing, lp, safe_head, side)
     aa_setting(cmd)
     charging(lp)
+    duck_peek_fix.run(cmd)
+    auto_exploit.run(cmd)
 end
 
 function pre_rendering()
@@ -3777,85 +4000,393 @@ local function calculate_damage_to_stomach(enemy_idx)
     return max_damage
 end
 
-local function resolver_update()
-    local players = entity.get_players(true)
-    
-    if not menu.misc.resolver:get() then
-        -- if menu.misc.debug:get() then
-        --     print("Resolver disabled")
-        -- end
-        for i = 1, #players do
-            local player_index = players[i]
-            if entity.is_alive(player_index) then
-                plist.set(player_index, "Force body yaw value", 0)
-                plist.set(player_index, "Force body yaw", false)
+local function vtable_bind(module, interface, index, type)
+    local ptr = ffi.cast("void***", client.create_interface(module, interface))
+    local this = ptr[0]
+    local fn = ffi.cast(type, this[index])
+    return function(...)
+        return fn(this, ...)
+    end
+end
+
+local resolved_players = {}
+local resolver_player_records = {}
+
+local function clear_resolver_data()
+    resolver_player_records = {}
+    resolved_players = {}
+end
+
+local get_client_entity = vtable_bind("client.dll", "VClientEntityList003", 3, "void*(__thiscall*)(void*, int)")
+
+local animstate_type = ffi.typeof([[
+    struct {
+        char pad0[0x18];
+        float anim_update_timer;
+        char pad1[0xC];
+        float started_moving_time;
+        float last_move_time;
+        char pad2[0x10];
+        float last_lby_time;
+        char pad3[0x8];
+        float run_amount;
+        char pad4[0x10];
+        void* entity;
+        void* active_weapon;
+        void* last_active_weapon;
+        float last_client_side_animation_update_time;
+        int last_client_side_animation_update_framecount;
+        float eye_timer;
+        float eye_angles_y;
+        float eye_angles_x;
+        float goal_feet_yaw;
+        float current_feet_yaw;
+        float torso_yaw;
+        float last_move_yaw;
+        float lean_amount;
+        char pad5[0x4];
+        float feet_cycle;
+        float feet_yaw_rate;
+        char pad6[0x4];
+        float duck_amount;
+        float landing_duck_amount;
+        char pad7[0x4];
+        float current_origin[3];
+        float last_origin[3];
+        float velocity_x;
+        float velocity_y;
+        char pad8[0x4];
+        float unknown_float1;
+        char pad9[0x8];
+        float unknown_float2;
+        float unknown_float3;
+        float unknown;
+        float m_velocity;
+        float jump_fall_velocity;
+        float clamped_velocity;
+        float feet_speed_forwards_or_sideways;
+        float feet_speed_unknown_forwards_or_sideways;
+        float last_time_started_moving;
+        float last_time_stopped_moving;
+        bool on_ground;
+        bool hit_in_ground_animation;
+        char pad10[0x4];
+        float time_since_in_air;
+        float last_origin_z;
+        float head_from_ground_distance_standing;
+        float stop_to_full_running_fraction;
+        char pad11[0x4];
+        float magic_fraction;
+        char pad12[0x3C];
+        float world_force;
+        char pad13[0x1CA];
+        float min_yaw;
+        float max_yaw;
+    }**
+]])
+
+local function get_anim_state(player_idx)
+    if not player_idx then
+        return nil
+    end
+    local ent_ptr = get_client_entity(player_idx)
+    if not ent_ptr then
+        return nil
+    end
+    local casted_ptr = ffi.cast(animstate_type, ffi.cast("char*", ffi.cast("void***", ent_ptr)) + 39264)
+    if casted_ptr == nil or casted_ptr[0] == nil then
+        return nil
+    end
+    return casted_ptr[0]
+end
+
+local function get_old_simulation_time(player_idx)
+    local ent_ptr = get_client_entity(player_idx)
+    if not ent_ptr then
+        return 0
+    end
+    return ffi.cast("float*", ffi.cast("uintptr_t", ent_ptr) + 620)[0]
+end
+
+local function calculate_max_desync(animstate)
+    if not animstate then
+        return 60
+    end
+    local speed_fraction = math.clamp(animstate.feet_speed_forwards_or_sideways, 0, 1)
+    local yaw_modifier = (((animstate.stop_to_full_running_fraction * -0.3) - 0.2) * speed_fraction) + 1
+    local duck_amount = animstate.duck_amount
+    if duck_amount > 0 then
+        yaw_modifier = yaw_modifier + (duck_amount * speed_fraction * (0.5 - yaw_modifier))
+    end
+    return math.clamp(yaw_modifier, 0.5, 1) * 60
+end
+
+local function create_player_record(player_idx)
+    local record = {}
+    record.player = player_idx
+    record.last_simtime = 0
+    record.origin = vector(entity.get_origin(player_idx))
+    record.broke_lc = false
+    record.in_defensive = false
+    record.ticks_left = 0
+    record.max_tickbase = math.abs(client.get_cvar("sv_maxusrcmdprocessticks") or 16) - 1
+    record.tickbase_difference = 0
+
+    function record.update()
+        local sim_time_prop = entity.get_prop(record.player, "m_flSimulationTime") or 0
+        local sim_time_ticks = math.floor(sim_time_prop / globals.tickinterval() + 0.5)
+        local temp_sim_ticks = sim_time_ticks
+        local current_origin = vector(entity.get_origin(record.player))
+        local tickbase = entity.get_prop(record.player, "m_nTickBase")
+        local tick_difference = temp_sim_ticks - record.last_simtime
+        if tickbase then
+            if tick_difference < 0 then
+                local choked_ticks = math.abs(tick_difference)
+                record.ticks_left = math.clamp(choked_ticks, 0, record.max_tickbase)
+                record.tickbase_difference = tickbase
+            else
+                if record.tickbase_difference > 0 then
+                    local choked_ticks = math.abs(tickbase - record.tickbase_difference)
+                    record.ticks_left = math.clamp(choked_ticks, 0, record.max_tickbase)
+                end
+                record.tickbase_difference = math.max(tickbase, record.tickbase_difference or 0)
             end
+            record.in_defensive = (record.ticks_left > 1) and (record.ticks_left < record.max_tickbase)
+        else
+            record.in_defensive = false
+            record.ticks_left = 0
+        end
+        if tick_difference >= 0 then
+            record.broke_lc = (record.origin - current_origin):length2dsqr() > 4096
+            record.origin = current_origin
+        end
+        record.last_simtime = temp_sim_ticks
+    end
+
+    resolver_player_records[player_idx] = record
+    return record
+end
+
+local function apply_resolve_to_plist(player_idx, resolve_settings)
+    plist.set(player_idx, "Force body yaw", resolve_settings.force_body_yaw and 1 or 0)
+    plist.set(player_idx, "Force body yaw value", resolve_settings.yaw_value or 0)
+end
+
+local function analyze_update_delay(player_data, current_tick)
+    if not player_data.angle_history then
+        player_data.angle_history = {}
+        player_data.delay_history = {}
+        player_data.cached_delay = nil
+        player_data.delay_consistency = 0
+        player_data.last_update_tick = current_tick
+        return nil
+    end
+    local tick_delta = current_tick - player_data.last_update_tick
+    player_data.last_update_tick = current_tick
+    if (tick_delta >= 2) and (tick_delta < 10) then
+        table.insert(player_data.delay_history, tick_delta)
+        if #player_data.delay_history > 8 then
+            table.remove(player_data.delay_history, 1)
+        end
+        if #player_data.delay_history >= 3 then
+            local sum_delays = 0
+            local is_consistent = true
+            local first_delay = player_data.delay_history[1]
+            for idx = 1, #player_data.delay_history do
+                sum_delays = sum_delays + player_data.delay_history[idx]
+                if math.abs(player_data.delay_history[idx] - first_delay) > 1 then
+                    is_consistent = false
+                end
+            end
+            if is_consistent and (first_delay > 2) then
+                player_data.cached_delay = first_delay
+                player_data.delay_consistency = math.min(player_data.delay_consistency + 1, 5)
+            else
+                player_data.delay_consistency = math.max(player_data.delay_consistency - 1, 0)
+                if player_data.delay_consistency == 0 then
+                    player_data.cached_delay = nil
+                end
+            end
+        end
+    elseif tick_delta <= 2 then
+        player_data.delay_consistency = math.max((player_data.delay_consistency or 0) - 1, 0)
+        if player_data.delay_consistency == 0 then
+            player_data.cached_delay = nil
+            player_data.delay_history = {}
+        end
+    end
+    return player_data.cached_delay
+end
+
+local function get_historical_angle(player_data, delay_ticks)
+    if (not player_data.angle_history) or (#player_data.angle_history < (delay_ticks + 1)) then
+        return nil
+    end
+    local history_idx = #player_data.angle_history - delay_ticks
+    if (history_idx >= 1) and (history_idx <= #player_data.angle_history) then
+        return player_data.angle_history[history_idx]
+    end
+    return nil
+end
+
+local function classify_anti_aim_state(player_data, yaw_delta, max_desync, current_tick)
+    local abs_yaw_delta = math.abs(yaw_delta)
+    if abs_yaw_delta < 5 then
+        player_data.static_ticks = (player_data.static_ticks or 0) + 1
+        if player_data.static_ticks >= 3 then
+            return "S"
+        end
+    else
+        player_data.static_ticks = 0
+    end
+    if abs_yaw_delta > 30 then
+        player_data.jitter_ticks = (player_data.jitter_ticks or 0) + 1
+        if player_data.jitter_ticks >= 2 then
+            local cached_delay = analyze_update_delay(player_data, current_tick)
+            if cached_delay and (player_data.delay_consistency >= 3) then
+                return "DJ"
+            end
+            return "J"
+        end
+    else
+        player_data.jitter_ticks = math.max((player_data.jitter_ticks or 0) - 1, 0)
+    end
+    return "S"
+end
+
+local function resolve_player(player_idx)
+    local steamid = entity.get_steam64(player_idx)
+    if steamid == 0 or steamid == "0" then
+        return
+    end
+    local record = resolver_player_records[player_idx] or create_player_record(player_idx)
+    record.update()
+    local animstate = get_anim_state(player_idx)
+    if not animstate then
+        return
+    end
+    local sim_time = entity.get_prop(player_idx, "m_flSimulationTime")
+    local old_sim_time = get_old_simulation_time(player_idx)
+    local eye_angles_y = select(2, entity.get_prop(player_idx, "m_angEyeAngles"))
+    if (not eye_angles_y) or (not sim_time) then
+        return
+    end
+    local sim_time_ticks = math.floor(sim_time / globals.tickinterval() + 0.5)
+    local player_data = resolved_players[player_idx]
+    if not player_data then
+        player_data = {
+            last_yaw = eye_angles_y,
+            last_simtime = sim_time,
+            side = 1,
+            jitter_ticks = 0,
+            static_ticks = 0,
+            no_update_ticks = 0,
+            resolve_yaw = 0,
+            last_resolve_yaw = 0,
+            aa_state = "S",
+            angle_history = {},
+            delay_history = {},
+            cached_delay = nil,
+            delay_consistency = 0,
+            last_update_tick = sim_time_ticks
+        }
+        resolved_players[player_idx] = player_data
+        return
+    end
+    if (sim_time == player_data.last_simtime) or (sim_time == old_sim_time) then
+        player_data.no_update_ticks = (player_data.no_update_ticks or 0) + 1
+        local is_defensive = ((record.in_defensive ~= nil) and record.in_defensive) or false
+        apply_resolve_to_plist(player_idx, {force_body_yaw = (not is_defensive), yaw_value = player_data.last_resolve_yaw})
+        client.update_player_list()
+        return
+    end
+    player_data.no_update_ticks = 0
+    local yaw_delta = normalize_yaw(eye_angles_y - player_data.last_yaw)
+    local max_desync = calculate_max_desync(animstate)
+    table.insert(player_data.angle_history, eye_angles_y)
+    if #player_data.angle_history > 16 then
+        table.remove(player_data.angle_history, 1)
+    end
+    player_data.aa_state = classify_anti_aim_state(player_data, yaw_delta, max_desync, sim_time_ticks)
+    if (player_data.aa_state == "DJ") and player_data.cached_delay then
+        local historical_angle = get_historical_angle(player_data, player_data.cached_delay)
+        if historical_angle then
+            local angle_delta = normalize_yaw(eye_angles_y - historical_angle)
+            if math.abs(angle_delta) > 30 then
+                player_data.side = ((angle_delta > 0) and 1) or -1.0
+            end
+            local abs_delta = math.abs(angle_delta)
+            local desync_scale = math.clamp(abs_delta / max_desync, 0.15, 1)
+            player_data.resolve_yaw = player_data.side * max_desync * desync_scale
+        else
+            if math.abs(yaw_delta) > 30 then
+                player_data.side = ((yaw_delta > 0) and 1) or -1.0
+            end
+            local abs_delta = math.abs(yaw_delta)
+            local desync_scale = math.clamp(abs_delta / max_desync, 0.15, 1)
+            player_data.resolve_yaw = player_data.side * max_desync * desync_scale
+        end
+    else
+        if math.abs(yaw_delta) > 30 then
+            player_data.side = ((yaw_delta > 0) and 1) or -1.0
+        end
+        local abs_delta = math.abs(yaw_delta)
+        local desync_scale = math.clamp(abs_delta / max_desync, 0.15, 1)
+        player_data.resolve_yaw = player_data.side * max_desync * desync_scale
+    end
+    player_data.last_resolve_yaw = player_data.resolve_yaw
+    local is_defensive = ((record.in_defensive ~= nil) and record.in_defensive) or false
+    apply_resolve_to_plist(player_idx, {force_body_yaw = (not is_defensive), yaw_value = player_data.resolve_yaw})
+    client.update_player_list()
+    player_data.last_yaw = eye_angles_y
+    player_data.last_simtime = sim_time
+end
+
+local function reset_resolver_settings()
+    for player_idx in pairs(resolved_players) do
+        if entity.is_enemy(player_idx) then
+            apply_resolve_to_plist(player_idx, {force_body_yaw = false, yaw_value = 0})
+        end
+    end
+    client.update_player_list()
+end
+
+local last_threat_player
+local function on_net_update_end()
+    local local_player = entity.get_local_player()
+    if (not local_player) or (not entity.is_alive(local_player)) then
+        reset_resolver_settings()
+        return
+    end
+    local current_threat = client.current_threat()
+    if current_threat ~= nil then
+        last_threat_player = current_threat
+    end
+    if (not current_threat) or (not entity.is_alive(current_threat)) then
+        if last_threat_player then
+            apply_resolve_to_plist(last_threat_player, {force_body_yaw = false, yaw_value = 0})
         end
         return
     end
+    if entity.is_dormant(current_threat) then
+        apply_resolve_to_plist(current_threat, {force_body_yaw = false, yaw_value = 0})
+        return
+    end
+    resolve_player(current_threat)
+end
 
-    local lp = entity.get_local_player()
-    if not lp or not entity.is_alive(lp) then 
-        -- if menu.misc.debug:get() then
-        --     print("Local player not alive")
-        -- end
-        return 
+local function on_resolver_toggle(control)
+    local is_enabled = menu.enable:get() and control:get()
+    if not is_enabled then
+        clear_resolver_data()
+        ref.reset_all:set(true)
     end
-
-    local desync_amount = adata.get_desync(2)
-    local body_yaw_newmethod_get_sda = 0  -- Initialize with default value
-
-    -- Получаем текущую цель
-    local target = client.current_threat()
-    
-    -- Если нет цели, используем первого вражеского игрока
-    if not target or not entity.is_alive(target) then
-        for i = 1, #players do
-            local player_index = players[i]
-            if entity.is_alive(player_index) and entity.get_prop(player_index, "m_iTeamNum") ~= entity.get_prop(lp, "m_iTeamNum") then
-                target = player_index
-                break
-            end
-        end
-    end
-    
-    -- Вычисляем desync для цели
-    if target and entity.is_alive(target) then
-        local pose_param = entity.get_prop(target, 'm_flPoseParameter', 11)
-        if pose_param then
-            body_yaw_newmethod_get_sda = math.floor(pose_param * 120 - 60)
-        end
-    end
-    
-    -- if menu.misc.debug:get() then
-    --     print("Desync amount:", tostring(desync_amount))
-    -- end
-    if target and entity.is_alive(target) then
-        if menu.misc.debug:get() then 
-            -- print("Target:", entity.get_player_name(target), "Body yaw:", body_yaw_newmethod_get_sda)
-        end
-    end
-    
-    -- Применяем resolver ко всем игрокам
-    for i = 1, #players do
-        local player_index = players[i]
-        if entity.is_alive(player_index) then
-            local target_name = entity.get_player_name(player_index)
-            
-            -- Применяем resolver только к вражеским игрокам
-            if entity.get_prop(player_index, "m_iTeamNum") ~= entity.get_prop(lp, "m_iTeamNum") then
-                plist.set(player_index, "Force body yaw", true)
-                plist.set(player_index, "Force body yaw value", body_yaw_newmethod_get_sda)
-                
-                if menu.misc.debug:get() then
-                    -- print("Applied resolver to:", target_name, "Body yaw:", body_yaw_newmethod_get_sda)
-                end
-            else
-                -- Сбрасываем настройки для своих
-                plist.set(player_index, "Force body yaw", false)
-                plist.set(player_index, "Force body yaw value", 0)
-            end
-        end
+    if is_enabled then
+        client.set_event_callback("net_update_end", on_net_update_end)
+        client.set_event_callback("round_prestart", clear_resolver_data)
+    else
+        client.unset_event_callback("net_update_end", on_net_update_end)
+        client.unset_event_callback("round_prestart", clear_resolver_data)
     end
 end
 
@@ -4036,7 +4567,11 @@ client.set_event_callback("aim_hit", aim_hit)
 
 -- Add aimtools update callback
 client.set_event_callback("paint", aimtools_update)
-client.set_event_callback("paint", resolver_update)
+
+menu.misc.resolver:set_callback(on_resolver_toggle, true)
+menu.enable:set_callback(function()
+    on_resolver_toggle(menu.misc.resolver)
+end)
 
 client.set_event_callback('paint', function()
     if not menu.misc.resolver:get() or not entity.is_alive(entity.get_local_player()) then return end
