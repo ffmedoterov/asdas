@@ -1151,8 +1151,11 @@ do
 
     --#region: callbacks
 
+    local is_updating = false
     local silent = false
     local update = function(e)
+        if is_updating then return end
+        is_updating = true
         selected = ui.get(refs.list.ref)
 
         local new, old = entity.get_players(), players.list
@@ -1185,6 +1188,7 @@ do
 
         slot.select(selected)
         client.fire_event("pui::plist_update", selected)
+        is_updating = false
     end
 
     do
@@ -1348,9 +1352,9 @@ local function calculate_angle(lpos, epos)
 end
 
 local lua = {
-    conds = {"Global", "Standing", "Moving", "Slow-walking", "Jumping", "Jump-crouching", "Crouching", "Hidden"},
-    conds_no_g = {"Standing", "Moving", "Slow-walking", "Jumping", "Jump-crouching", "Crouching"},
-    short_conds = {"[G]", "[S]", "[M]", "[SW]", "[J]", "[JC]", "[C]", "[H]"},
+    conds = {"Global", "Standing", "Moving", "Slow-walking", "Jumping", "Jump-crouching", "Crouching", "Legit", "Hidden"},
+    conds_no_g = {"Standing", "Moving", "Slow-walking", "Jumping", "Jump-crouching", "Crouching", "Legit"},
+    short_conds = {"[G]", "[S]", "[M]", "[SW]", "[J]", "[JC]", "[C]", "[L]", "[H]"},
     hitgroup_mass = {'generic','head', 'chest', 'stomach','left arm', 'right arm','left leg', 'right leg','neck', 'generic', 'gear'},
 }
 
@@ -1443,7 +1447,7 @@ local menu = {
     fake_lag_variance = pui.slider("AA", "Fake lag", "Variance ", 0, 100, 1, true, "%"),
     fake_lag_limit = pui.slider("AA", "Fake lag", "Limit ", 1, 15, 15),
 
-    mode = pui.combobox("AA", "Anti-aimbot angles", "Mode", {"Builder", "Preset"}),
+    mode = pui.combobox("AA", "Anti-aimbot angles", "Mode", {"Builder"}),
     state = pui.combobox("AA", "Anti-aimbot angles", "State", lua.conds),
     builder = {},
     aa_options = {
@@ -1484,6 +1488,7 @@ local menu = {
     },
     misc = {
         resolver = pui.checkbox("AA", "Anti-aimbot angles", "Resolver"),
+        predict = pui.hotkey("AA", "Anti-aimbot angles", "Predict"),
         aimtools_enable = pui.checkbox("AA", "Anti-aimbot angles", "Aimtools"),
         aimtools = {
             weapon = pui.combobox("AA", "Anti-aimbot angles", "Weapons", {"Desert Eagle", "SSG 08", "AWP"}),
@@ -1634,9 +1639,6 @@ function filter_console()
         client.exec("con_filter_enable 0")
     end
 end
-
-local en_debug = {menu.enable, function(self) if self:get() then return true else return false end end}
-local deb_debug = menu.misc.debug
 
 function set_menu_builder()
     if ui.is_menu_open() then
@@ -1855,6 +1857,7 @@ menu.aa_options.secret_exploit:depend(en, {menu.tab_fl, "-- binds"})
 menu.aa_options.safe_head:depend(en, {menu.tab_fl, "-- binds"})
 
 menu.misc.resolver:depend(en, misctab)
+menu.misc.predict:depend(en, misctab)
 menu.misc.aimtools_enable:depend(en, misctab)
 menu.misc.aimtools.weapon:depend(en, misctab, menu.misc.aimtools_enable)
 menu.misc.aimtools.deagle.mode1:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "Desert Eagle"})
@@ -1933,7 +1936,7 @@ for i = 1, (#lua.conds - 1) do
         yaw_add = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Yaw-add", {"Off", "Left & right"}),
         yaw_left = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Yaw-add left", -180, 180, 0),
         yaw_right = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Yaw-add right", -180, 180, 0),
-        yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Yaw", {"Center", "Slow", "Advanced skitter"}),
+        yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Yaw", {"Center", --[["Slow",]] "Advanced skitter"}),
         yaw_center = pui.slider("AA", "Anti-aimbot angles", "\n" .. "\a00000000" .. lua.conds[i] .. "Yaw", -180, 180, 0),
         xway_ways = pui.slider("AA", "Anti-aimbot angles", dobavok .. "X-Way ways", 3, 10, 3),
         xway_jitter = pui.slider("AA", "Anti-aimbot angles", dobavok .. "X-Way jitter", -90, 90, 0, 1, "°"),
@@ -1941,7 +1944,7 @@ for i = 1, (#lua.conds - 1) do
         double_tick_update = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Double tick-update"),
         tick_update = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Tick-update", 0, 14, 2),
         tick_update_second = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Tick-update second", 0, 14, 2),
-        body_yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Body yaw", {"Off", "Jitter", "Smart", "Opposite"}),
+        body_yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Body yaw", {"Off", "Jitter", "Smart", "Opposite", "Static"}),
         body_yaw_degree = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Fake yaw", -180, 180, 0),
         defensive = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Defensive aa"),
         d_pitch = pui.combobox("AA", "Anti-aimbot angles", dobavok_d .. "Pitch", {"Static", "Lerp", "Random", "Jitter", "Sway"}),
@@ -1962,7 +1965,7 @@ for i = 1, (#lua.conds - 1) do
         d_tick_update = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Tick-update", 0, 14, 2),
         d_offset = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Defensive yaw-offset", -180, 180, 0),
     }
-    if i ~= 1 and i ~= 8 then
+    if i ~= 1 and i ~= 9 then
         menu.builder[i].enable:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]})
     else
         menu.builder[i].enable:set_visible(menu.misc.debug:get())
@@ -1970,9 +1973,9 @@ for i = 1, (#lua.conds - 1) do
     menu.builder[i].pitch:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
     menu.builder[i].yaw_default:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
     menu.builder[i].yaw:depend(en,menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
-    menu.builder[i].double_tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"})
-    menu.builder[i].tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"})
-    menu.builder[i].tick_update_second:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Slow"}, menu.builder[i].double_tick_update)
+    menu.builder[i].double_tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable--[[, {menu.builder[i].yaw, "Slow"}]])
+    menu.builder[i].tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable--[[, {menu.builder[i].yaw, "Slow"}]])
+    menu.builder[i].tick_update_second:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable--[[, {menu.builder[i].yaw, "Slow"}]], menu.builder[i].double_tick_update)
     menu.builder[i].yaw_center:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Off", true}, {menu.builder[i].yaw, "Advanced skitter", true})
     menu.builder[i].xway_ways:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Advanced skitter"})
     menu.builder[i].xway_jitter:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw, "Advanced skitter"})
@@ -1981,7 +1984,7 @@ for i = 1, (#lua.conds - 1) do
     menu.builder[i].yaw_left:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw_add, "Left & right"})
     menu.builder[i].yaw_right:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].yaw_add, "Left & right"})
     menu.builder[i].body_yaw:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
-    menu.builder[i].body_yaw_degree:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].body_yaw, "Jitter"})
+    menu.builder[i].body_yaw_degree:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].body_yaw, function() return menu.builder[i].body_yaw:get() == "Jitter" or menu.builder[i].body_yaw:get() == "Static" end})
     menu.builder[i].defensive:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive)
     menu.builder[i].d_pitch:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive)
     menu.builder[i].d_pitch_degree:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, function() return menu.builder[i].d_pitch:get() == "Static" or menu.builder[i].d_pitch:get() == "Sway" end})
@@ -2418,237 +2421,6 @@ local function get_freestand_direction (player)
     return data.side
 end
 
--- Функция для применения пресета "Test"
-function apply_test_preset()
-    -- Настройки для пресета "Test"
-    local test_preset = {
-        -- Standing state
-        [2] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = 0,
-            yaw_right = 0,
-            yaw = "Center",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Jitter",
-            body_yaw_degree = 60,
-            defensive = false,
-        },
-        -- Moving state
-        [3] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = 0,
-            yaw_right = 0,
-            yaw = "Slow",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Smart",
-            body_yaw_degree = 60,
-            defensive = false,
-        },
-        -- Crouching state
-        [7] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = 0,
-            yaw_right = 0,
-            yaw = "Center",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Jitter",
-            body_yaw_degree = 60,
-            defensive = false,
-        },
-    }
-    
-    -- Применяем настройки к элементам builder
-    for state_index, settings in pairs(test_preset) do
-        if menu.builder[state_index] then
-            for setting_name, value in pairs(settings) do
-                if menu.builder[state_index][setting_name] then
-                    menu.builder[state_index][setting_name]:set(value)
-                end
-            end
-        end
-    end
-    
-    print("[preset] Applied Test preset")
-end
-
--- Функция для применения пресета "Chester's Cider" (полная конфигурация из Chimera Alpha)
-function apply_chester_cider_preset()
-    -- Точная конфигурация Chester's Cider из Chimera Alpha JSON
-    local chester_cider_preset = {
-        -- Standing Angles (индекс 2) - Default Angles
-        [2] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = -7,
-            yaw_right = 11,
-            yaw = "Center",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Jitter",
-            body_yaw_degree = -46,
-            defensive = false,
-        },
-        -- Moving Angles (индекс 3)
-        [3] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = -6,
-            yaw_right = 11,
-            yaw = "Center",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Jitter",
-            body_yaw_degree = -52,
-            defensive = false,
-        },
-        -- Slow Walking Angles (индекс 4)
-        [4] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = -23,
-            yaw_right = 47,
-            yaw = "Center",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Jitter",
-            body_yaw_degree = -5,
-            defensive = false,
-        },
-        -- Jumping Angles (индекс 5)
-        [5] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = -3,
-            yaw_right = 16,
-            yaw = "Center",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Jitter",
-            body_yaw_degree = -47,
-            defensive = false,
-        },
-        -- Jump-crouching Angles (индекс 6) - In Air & Crouching
-        [6] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = -8,
-            yaw_right = 14,
-            yaw = "Center",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Jitter",
-            body_yaw_degree = -46,
-            defensive = false,
-        },
-        -- Crouching Angles (индекс 7)
-        [7] = {
-            enable = true,
-            pitch = "Down",
-            yaw_default = 0,
-            yaw_add = "Off",
-            yaw_left = -10,
-            yaw_right = 16,
-            yaw = "Center",
-            yaw_center = 0,
-            yaw_randomize = 0,
-            double_tick_update = false,
-            tick_update = 2,
-            tick_update_second = 2,
-            body_yaw = "Jitter",
-            body_yaw_degree = -35,
-            defensive = false,
-        }
-    }
-    
-    -- Применяем настройки к элементам builder
-    for state_index, settings in pairs(chester_cider_preset) do
-        if menu.builder[state_index] then
-            for setting_name, value in pairs(settings) do
-                if menu.builder[state_index][setting_name] then
-                    menu.builder[state_index][setting_name]:set(value)
-                end
-            end
-        end
-    end
-    
-    -- Дополнительные настройки из Chester's Cider
-    -- Настройки для AA опций
-    if menu.aa_options then
-        menu.aa_options.yaw_base:set(true) -- At Target
-        menu.aa_options.manual_base:set("None")
-        menu.aa_options.freestand:set(false)
-        menu.aa_options.defensive:set(true)
-        menu.aa_options.static_on_def:set(false)
-        menu.aa_options.secret_exploit:set(false)
-        menu.aa_options.safe_head:set(true) -- Safe head enabled
-    end
-    
-    -- Настройки для misc
-    if menu.misc then
-        menu.misc.dt_recharge:set(false)
-        menu.misc.fast_ladder:set(false)
-        menu.misc.avoid_backstab:set(true)
-        menu.misc.teammate_whitelist:set(false)
-        menu.misc.debug:set(false)
-        menu.misc.animfix:set({"Legs", "Jumping", "Dirty sprite"})
-        menu.misc.cvar_optimizer:set({})
-        menu.misc.filter_console:set(false)
-        menu.misc.viewmodel_enable:set(true)
-        menu.misc.viewmodel.x:set(5)
-        menu.misc.viewmodel.y:set(-52)
-        menu.misc.viewmodel.z:set(0)
-        menu.misc.viewmodel.fov:set(120) -- Максимальное значение для viewmodel fov
-    end
-    
-    print("[preset] Applied Chester's Cider preset (full configuration from Chimera Alpha)")
-end
-
 function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
     local tickrate = globals.tickcount() - entity.get_prop(lp, "m_flSimulationTime") * 64
     local doubletap_ref = ref.dt:get() and ref.dt:get_hotkey()
@@ -2685,7 +2457,7 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
         end
         if globals.chokedcommands() == 0 then
             ram.aa_tickrate = ram.aa_tickrate + 1
-            if tab.yaw:get() == "Slow" and not ram.defensive_work then
+            if --[[tab.yaw:get() == "Slow" and]] not ram.defensive_work then
                 if tab.double_tick_update:get() then
                     if ram.jitter then 
                         if ram.anti_aim.jit_tick_right ~= 0 then
@@ -2771,11 +2543,14 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
                 if tab.body_yaw:get() == "Jitter" then
                     ram.anti_aim.cheat_body = "Jitter"
                     ram.anti_aim.fake = tab.body_yaw_degree:get()
+                elseif tab.body_yaw:get() == "Static" then
+                    ram.anti_aim.cheat_body = "Static"
+                    ram.anti_aim.fake = tab.body_yaw_degree:get()
                 elseif tab.body_yaw:get() == "Opposite" then
                     ram.anti_aim.cheat_body = "Opposite"
                     ram.anti_aim.fake = 0
                 else
-                    ram.anti_aim.cheat_body = "Static"
+                    ram.anti_aim.cheat_body = "Off"
                     ram.anti_aim.fake = 0
                 end
             elseif tab.yaw:get() ~= "Off" then
@@ -3185,6 +2960,7 @@ function charging(lp)
     end
 end
 
+--[=[
 local main_massive_logs = {}
 local for_rendering = {}
 
@@ -3199,7 +2975,7 @@ function aim_hit(e)
         local bt = sht_info.backtrack
         local ht = math.floor(sht_info.hitchance)
         local test_frst = "Hit \0"
-        local realdmg = sht_info.target_hp - entity.get_prop(sht_info.target, "m_iHealth")
+        local realdmg = e.dmg_health
         client.color_log(ar, ag, ab, "Damage given to \0")
         client.color_log(r, g, b, tname .. "\0")
         client.color_log(ar, ag, ab, "'s \0")
@@ -3250,12 +3026,6 @@ function aim_miss(e)
     end
 end
 
-function reset_tick()
-    ram.aa_tickrate = 1
-    ram.tick_def_off = 0
-    reset_def()
-end
-
 function aim_fire(e)
     local tickrate = client.get_cvar("cl_cmdrate") or 64
     local ticks = globals.tickcount() - e.tick
@@ -3268,6 +3038,174 @@ function aim_fire(e)
         target_hp = entity.get_prop(e.target, "m_iHealth"),
     }
     reset_tick()
+end
+--]=]
+
+local for_rendering = {}
+
+function reset_tick()
+    ram.aa_tickrate = 1
+    ram.tick_def_off = 0
+    reset_def()
+end
+
+do
+    local MISS_COLOR = { r = 255, g = 0, b = 50, a = 255 }
+    local MISS_SPREAD_COLOR = { r = 255, g = 205, b = 0, a = 255 }
+    
+    local last_aim_data = { backtrack = 0, hitgroup = 0, damage = 0 }
+    local last_hit_data = { hit_chance = 70 }
+    
+    local hitgroup_names = { 
+        [0] = 'generic', 'head', 'chest', 'stomach', 
+        'left arm', 'right arm', 'left leg', 'right leg', 
+        'neck', '?', 'gear' 
+    }
+    
+    local function log_miss_to_console(e, victim_name, wanted_hitgroup, wanted_damage, hit_chance, backtrack, color, accent)
+        client.color_log(accent.r, accent.g, accent.b, "Missed in \0")
+        client.color_log(color.r, color.g, color.b, victim_name .. "'s \0")
+        client.color_log(color.r, color.g, color.b, wanted_hitgroup .. "\0")
+        client.color_log(accent.r, accent.g, accent.b, " due to \0")
+        client.color_log(color.r, color.g, color.b, e.reason .. " \0")
+        client.color_log(accent.r, accent.g, accent.b, "[HT: \0")
+        client.color_log(color.r, color.g, color.b, math.floor(hit_chance) .. "% \0")
+        client.color_log(accent.r, accent.g, accent.b, "~ | ~ DMG: \0")
+        client.color_log(color.r, color.g, color.b, wanted_damage .. " \0")
+        client.color_log(accent.r, accent.g, accent.b, "~ | ~ BT: \0")
+        client.color_log(color.r, color.g, color.b, backtrack .. "\0")
+        client.color_log(accent.r, accent.g, accent.b, "]\n")
+    end
+    
+    local function log_hit_to_console(e, victim_name, group, damage, health, hit_chance, backtrack, wanted_hitgroup, wanted_damage, color, accent)
+        client.color_log(accent.r, accent.g, accent.b, "Damage given to \0")
+        client.color_log(color.r, color.g, color.b, victim_name .. "\0")
+        client.color_log(accent.r, accent.g, accent.b, "'s \0")
+        client.color_log(color.r, color.g, color.b, group .. " \0")
+        client.color_log(accent.r, accent.g, accent.b, "~ \0")
+        client.color_log(color.r, color.g, color.b, damage .. " (" .. wanted_damage .. ") \0")
+        client.color_log(accent.r, accent.g, accent.b, "[HT: \0")
+        client.color_log(color.r, color.g, color.b, math.floor(hit_chance) .. "% \0")
+        client.color_log(accent.r, accent.g, accent.b, "~ | ~ BT:\0 ")
+        client.color_log(color.r, color.g, color.b, backtrack .. "\0")
+        client.color_log(accent.r, accent.g, accent.b, " ~ | ~ RHP:\0 ")
+        client.color_log(color.r, color.g, color.b, health .. "\0")
+        client.color_log(accent.r, accent.g, accent.b, "]\n")
+    end
+    
+    local function on_aim_fire(e)
+        if not menu.visuals.logs:get() then
+            return
+        end
+
+        last_aim_data = { 
+            backtrack = globals.tickcount() - e.tick or 0,
+            hitgroup = e.hitgroup or 0, 
+            damage = e.damage or 0 
+        }
+        reset_tick()
+    end
+    
+    local function on_aim_hit(e)
+        if not menu.visuals.logs:get() then
+            return
+        end
+
+        last_hit_data = { 
+            hit_chance = e.hit_chance or 70,
+        }
+    end
+    
+    local function on_aim_miss(e)
+        if not menu.visuals.logs:get() then
+            return
+        end
+
+        local victim_name = entity.get_player_name(e.target) or 'unknown'
+        local wanted_hitgroup = hitgroup_names[last_aim_data.hitgroup] or 'unknown'
+        local wanted_damage = last_aim_data.damage or 0
+        local hit_chance = e.hit_chance or 0
+        local backtrack = last_aim_data.backtrack or 0
+        
+        local color
+        if e.reason == 'spread' or e.reason == 'prediction error' then
+            color = MISS_SPREAD_COLOR
+        else
+            color = MISS_COLOR
+        end
+
+        local ar, ag, ab = menu.visuals.logs_color1:get()
+        local accent = { r = ar, g = ag, b = ab, a = 255 }
+        
+        log_miss_to_console(
+            e, 
+            victim_name, 
+            wanted_hitgroup, 
+            wanted_damage, 
+            hit_chance, 
+            backtrack, 
+            color,
+            accent
+        )
+
+        if menu.visuals.screen_logs:get() then
+            local text = string.format("[project john] missed in %s's %s for %d", victim_name, wanted_hitgroup, wanted_damage)
+            table.insert(for_rendering, 1, {text = text, alpha = 0, add_y = 0, tick = globals.curtime() * 64, randomize = math.random(0, 100)})
+        end
+    end
+    
+    local function on_player_hurt(e)
+        if not menu.visuals.logs:get() then
+            return
+        end
+
+        local attacker = client.userid_to_entindex(e.attacker)
+        local local_player = entity.get_local_player()
+        
+        if attacker ~= local_player then 
+            return 
+        end
+        
+        local victim = client.userid_to_entindex(e.userid)
+        local victim_name = entity.get_player_name(victim) or 'unknown'
+        local damage = e.dmg_health or 0
+        local hitgroup = e.hitgroup or 0
+        local group = hitgroup_names[hitgroup] or 'unknown'
+        local wanted_hitgroup = hitgroup_names[last_aim_data.hitgroup] or 'unknown'
+        local wanted_damage = last_aim_data.damage or 0
+        local hit_chance = last_hit_data.hit_chance or 0
+        local backtrack = last_aim_data.backtrack or 0
+        local health = e.health or 0
+
+        local ar, ag, ab = menu.visuals.logs_color1:get()
+        local hr, hg, hb = menu.visuals.logs_color2:get()
+        local accent = { r = ar, g = ag, b = ab, a = 255 }
+        local color = { r = hr, g = hg, b = hb, a = 255 }
+        
+        log_hit_to_console(
+            e,
+            victim_name, 
+            group, 
+            damage, 
+            health, 
+            hit_chance, 
+            backtrack, 
+            wanted_hitgroup, 
+            wanted_damage, 
+            color,
+            accent
+        )
+
+        if menu.visuals.screen_logs:get() then
+            local text = string.format("[project john] damage given to %s for %d (%d)", victim_name, damage, wanted_damage)
+            table.insert(for_rendering, 1, {text = text, alpha = 0, add_y = 0, tick = globals.curtime() * 64, randomize = math.random(0, 100)})
+        end
+    end
+    
+    client.set_event_callback('aim_fire', on_aim_fire)
+    client.set_event_callback('aim_hit', on_aim_hit)
+    client.set_event_callback('aim_miss', on_aim_miss)
+    client.set_event_callback('player_hurt', on_player_hurt)
 end
 
 function set_on()
@@ -3629,6 +3567,10 @@ function paint()
             hide_ready_alpha = 0,
         }
     end
+    if menu.enable:get() and menu.misc.predict:get() and lp and entity.is_alive(lp) then
+        local r, g, b = menu.visuals.ind_color:get()
+        renderer.indicator(r, g, b, 255, "P")
+    end
     set_menu_builder()
 end
 
@@ -3640,9 +3582,9 @@ menu.visuals.newcomer_aspect_ratio:set_callback(aspect_ratio)
 
 client.set_event_callback("paint_ui", paint)
 
-client.set_event_callback("aim_miss", aim_miss)
-client.set_event_callback("aim_hit", aim_hit)
-client.set_event_callback("aim_fire", aim_fire)
+-- client.set_event_callback("aim_miss", aim_miss)
+-- client.set_event_callback("aim_hit", aim_hit)
+-- client.set_event_callback("aim_fire", aim_fire)
 
 function reset()
     for_rendering = {}
@@ -3878,8 +3820,29 @@ end
 function setup_commanding(cmd)
     local lp = entity.get_local_player()
     update_data(cmd, lp, client.current_threat())
+    
+    local is_e = cmd.in_use == 1
+    local is_defusing = false
+    local bomb = entity.get_all("CPlantedC4")
+    if #bomb > 0 then
+        local lpos = vector(entity.get_origin(lp))
+        local c4pos = vector(entity.get_origin(bomb[#bomb]))
+        if lpos:dist(c4pos) < 50 and entity.get_prop(lp, "m_iTeamNum") == 3 then
+            is_defusing = true
+        end
+    end
+    local in_bomb_zone = entity.get_prop(lp, "m_bInBombZone") == 1
+    local is_t = entity.get_prop(lp, "m_iTeamNum") == 2
+    local is_planting = in_bomb_zone and is_t
+
+    local is_legit_active = is_e and not is_defusing and not is_planting and menu.builder[8] and menu.builder[8].enable:get()
     local state = player.get_state(cmd, lp)
-    ind.scoped.state_name = menu.aa_options.manual_base:get() == "None" and ("-" .. string.upper(lua.conds_no_g[player.get_state(cmd, lp)]) .. "-") or ("-" .. string.upper(menu.aa_options.manual_base:get()) .. "-")
+    if is_legit_active then
+        state = 7
+        cmd.in_use = 0
+    end
+
+    ind.scoped.state_name = menu.aa_options.manual_base:get() == "None" and ("-" .. string.upper(lua.conds_no_g[state]) .. "-") or ("-" .. string.upper(menu.aa_options.manual_base:get()) .. "-")
     local avoid_backstabing = false
     local safe_head = false
     local side = "none"
@@ -4038,6 +4001,15 @@ end
 local resolved_players = {}
 local resolver_player_records = {}
 
+function r_val(player_idx)
+    if not player_idx then return 0 end
+    local player_data = resolved_players[player_idx]
+    if player_data then
+        return player_data.resolve_yaw or 0
+    end
+    return 0
+end
+
 local function clear_resolver_data()
     resolver_player_records = {}
     resolved_players = {}
@@ -4112,7 +4084,7 @@ local animstate_type = ffi.typeof([[
 ]])
 
 local function get_anim_state(player_idx)
-    if not player_idx then
+    if not player_idx or entity.get_classname(player_idx) ~= "CCSPlayer" then
         return nil
     end
     local ent_ptr = get_client_entity(player_idx)
@@ -4127,6 +4099,9 @@ local function get_anim_state(player_idx)
 end
 
 local function get_old_simulation_time(player_idx)
+    if not player_idx or entity.get_classname(player_idx) ~= "CCSPlayer" then
+        return 0
+    end
     local ent_ptr = get_client_entity(player_idx)
     if not ent_ptr then
         return 0
@@ -4151,7 +4126,8 @@ local function create_player_record(player_idx)
     local record = {}
     record.player = player_idx
     record.last_simtime = 0
-    record.origin = vector(entity.get_origin(player_idx))
+    local origin_x, origin_y, origin_z = entity.get_origin(player_idx)
+    record.origin = (origin_x ~= nil) and vector(origin_x, origin_y, origin_z) or nil
     record.broke_lc = false
     record.in_defensive = false
     record.ticks_left = 0
@@ -4162,7 +4138,8 @@ local function create_player_record(player_idx)
         local sim_time_prop = entity.get_prop(record.player, "m_flSimulationTime") or 0
         local sim_time_ticks = math.floor(sim_time_prop / globals.tickinterval() + 0.5)
         local temp_sim_ticks = sim_time_ticks
-        local current_origin = vector(entity.get_origin(record.player))
+        local origin_x, origin_y, origin_z = entity.get_origin(record.player)
+        local current_origin = (origin_x ~= nil) and vector(origin_x, origin_y, origin_z) or nil
         local tickbase = entity.get_prop(record.player, "m_nTickBase")
         local tick_difference = temp_sim_ticks - record.last_simtime
         if tickbase then
@@ -4183,8 +4160,14 @@ local function create_player_record(player_idx)
             record.ticks_left = 0
         end
         if tick_difference >= 0 then
-            record.broke_lc = (record.origin - current_origin):length2dsqr() > 4096
-            record.origin = current_origin
+            if record.origin ~= nil and current_origin ~= nil then
+                record.broke_lc = (record.origin - current_origin):length2dsqr() > 4096
+            else
+                record.broke_lc = false
+            end
+            if current_origin ~= nil then
+                record.origin = current_origin
+            end
         end
         record.last_simtime = temp_sim_ticks
     end
@@ -4362,7 +4345,7 @@ local function resolve_player(player_idx)
     end
     player_data.last_resolve_yaw = player_data.resolve_yaw
     local is_defensive = ((record.in_defensive ~= nil) and record.in_defensive) or false
-    apply_resolve_to_plist(player_idx, {force_body_yaw = (not is_defensive), yaw_value = player_data.resolve_yaw})
+    apply_resolve_to_plist(player_idx, {force_body_yaw = (not is_defensive), yaw_value = player_data.resolve_yaw}) --1231231
     client.update_player_list()
     player_data.last_yaw = eye_angles_y
     player_data.last_simtime = sim_time
@@ -4378,10 +4361,14 @@ local function reset_resolver_settings()
 end
 
 local last_threat_player
+local in_net_update = false
 local function on_net_update_end()
+    if in_net_update then return end
+    in_net_update = true
     local local_player = entity.get_local_player()
     if (not local_player) or (not entity.is_alive(local_player)) then
         reset_resolver_settings()
+        in_net_update = false
         return
     end
     local current_threat = client.current_threat()
@@ -4392,15 +4379,19 @@ local function on_net_update_end()
         if last_threat_player then
             apply_resolve_to_plist(last_threat_player, {force_body_yaw = false, yaw_value = 0})
         end
+        in_net_update = false
         return
     end
     if entity.is_dormant(current_threat) then
         apply_resolve_to_plist(current_threat, {force_body_yaw = false, yaw_value = 0})
+        in_net_update = false
         return
     end
     resolve_player(current_threat)
+    in_net_update = false
 end
 
+local resolver_registered = false
 local function on_resolver_toggle(control)
     local is_enabled = menu.enable:get() and control:get()
     if not is_enabled then
@@ -4408,39 +4399,66 @@ local function on_resolver_toggle(control)
         ref.reset_all:set(true)
     end
     if is_enabled then
-        client.set_event_callback("net_update_end", on_net_update_end)
-        client.set_event_callback("round_prestart", clear_resolver_data)
+        if not resolver_registered then
+            client.set_event_callback("net_update_end", on_net_update_end)
+            client.set_event_callback("round_prestart", clear_resolver_data)
+            resolver_registered = true
+        end
     else
-        client.unset_event_callback("net_update_end", on_net_update_end)
-        client.unset_event_callback("round_prestart", clear_resolver_data)
+        if resolver_registered then
+            client.unset_event_callback("net_update_end", on_net_update_end)
+            client.unset_event_callback("round_prestart", clear_resolver_data)
+            resolver_registered = false
+        end
+    end
+end
+
+local predict_hooked = false
+
+local function predict_cvars()
+    cvar.cl_interpolate:set_int(0)
+    cvar.cl_interp_ratio:set_int(1)
+end
+
+local function restore_predict_cvars()
+    cvar.cl_interpolate:set_int(1)
+    cvar.cl_interp_ratio:set_int(2)
+end
+
+local function predict_callback()
+    if menu.misc.predict:get() then
+        predict_cvars()
+    end
+end
+
+local function on_predict_toggle()
+    local enabled = menu.enable:get() and menu.misc.predict:get()
+    if enabled then
+        if not predict_hooked then
+            client.set_event_callback("pre_render", predict_callback)
+            predict_hooked = true
+        end
+    else
+        if predict_hooked then
+            client.unset_event_callback("pre_render", predict_callback)
+            predict_hooked = false
+        end
+        restore_predict_cvars()
     end
 end
 
 local function aimtools_update()
     if not menu.misc.aimtools_enable:get() then 
-        -- if menu.misc.debug:get() then
-        --     print("Aimtools disabled")
-        -- end
         return 
     end
     
-    -- if menu.misc.debug:get() then
-    --     print("Aimtools function called")
-    -- end
-    
     local lp = entity.get_local_player()
     if not lp or not entity.is_alive(lp) then 
-        -- if menu.misc.debug:get() then
-        --     print("Local player not alive")
-        -- end
         return 
     end
     
     local weapon_ent = entity.get_player_weapon(lp)
     if not weapon_ent then 
-        -- if menu.misc.debug:get() then
-        --     print("No weapon entity")
-        -- end
         return 
     end
     
@@ -4473,16 +4491,8 @@ local function aimtools_update()
             end
         end
         
-        -- if menu.misc.debug:get() then
-        --     print("Auto-selected weapon:", weapon_name)
-        --     print("Reset all aimtools settings")
-        -- end
     end
     
-    -- if menu.misc.debug:get() then
-    --     print("Current weapon:", weapon_name)
-    --     print("Selected weapon:", menu.misc.aimtools.weapon:get())
-    -- end
     
     local players = entity.get_players(true)
     
@@ -4499,19 +4509,12 @@ local function aimtools_update()
     end
     
     if not weapon_settings then 
-        if menu.misc.debug:get() then
-            print("No weapon settings found")
-        end
         return 
     end
     
     -- Проверяем, соответствует ли текущее оружие выбранному
     local is_weapon_selected = string.find(weapon_name, selected_weapon)
     if not is_weapon_selected then 
-        -- if menu.misc.debug:get() then
-        --     print("Weapon not selected:", weapon_name, "!=", selected_weapon)
-        -- end
-        -- Reset all players' aimtools settings when weapon doesn't match
         for i = 1, #players do
             local player_index = players[i]
             if entity.is_alive(player_index) then
@@ -4522,9 +4525,6 @@ local function aimtools_update()
         return 
     end
     
-    -- if menu.misc.debug:get() then
-    --     print("Processing players for weapon:", selected_weapon)
-    -- end
     
     for i = 1, #players do
         local player_index = players[i]
@@ -4557,15 +4557,7 @@ local function aimtools_update()
                 should_override = true
             end
         end
-        
-        -- Отладочная информация (можно убрать после проверки)
-        if menu.misc.debug:get() then
-            print(string.format("Weapon: %s, Player %d: HP=%d, Armor=%d, Distance=%.1f, StomachDMG=%.1f, Override=%s", 
-                weapon_name, player_index, enemy_health, enemy_armor, distance, 
-                weapon_settings.mode1:get("If lethal") and calculate_damage_to_stomach(player_index) or 0,
-                should_override and "YES" or "NO"))
-        end
-        
+    
         if should_override then
             -- Apply overrides based on mode2 selection
             if weapon_settings.mode2:get("Force Safe Point") then
@@ -4587,21 +4579,23 @@ local function aimtools_update()
     end
 end
 
-client.set_event_callback("aim_fire", aim_fire)
-client.set_event_callback("aim_miss", aim_miss)
-client.set_event_callback("aim_hit", aim_hit)
+-- client.set_event_callback("aim_fire", aim_fire)
+-- client.set_event_callback("aim_miss", aim_miss)
+-- client.set_event_callback("aim_hit", aim_hit)
 
--- Add aimtools update callback
 client.set_event_callback("paint", aimtools_update)
 
 menu.misc.resolver:set_callback(on_resolver_toggle, true)
+menu.misc.predict:set_callback(on_predict_toggle, true)
 menu.enable:set_callback(function()
     on_resolver_toggle(menu.misc.resolver)
+    on_predict_toggle()
 end)
 
 client.set_event_callback('paint', function()
     if not menu.misc.resolver:get() or not entity.is_alive(entity.get_local_player()) then return end
-    
+    if not menu.misc.debug:get() then return end
+
     local screen_width, screen_height = client.screen_size()
     local center_y = screen_height / 3.2
     local y_offset = 0
@@ -4610,7 +4604,7 @@ client.set_event_callback('paint', function()
     local target = client.current_threat()
     
     if target and entity.is_alive(target) then
-        local body_yaw_newmethod_get_sda = math.floor(entity.get_prop(target, 'm_flPoseParameter', 11) * 120 - 60)
+        local body_yaw_newmethod_get_sda = string.format("%.0f", r_val(target))
         
         local desync_amount = adata.get_desync(2)
         
