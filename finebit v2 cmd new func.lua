@@ -1244,6 +1244,8 @@ local csgo_weapons = require("gamesense/csgo_weapons")
 local hitgroup_names = {"generic", "head", "chest", "stomach", "left arm", "right arm", "left leg", "right leg", "neck", "?", "gear"}
 
 local menu
+local for_rendering
+local ram
 local active_state_id = 1
 local brute_container = {}
 local antibrute = {} do
@@ -1258,6 +1260,7 @@ local antibrute = {} do
                 exec_tick = 0,
                 reset_time = 0,
                 last_miss_time = 0,
+                meta_counter = 0,
             }
         end
         return brute_container[state_id]
@@ -1329,13 +1332,16 @@ local antibrute = {} do
 
         local new_angle = 0
 
-        if mode == 'Adaptive' then new_angle = math.random(-15, 15)
+        if mode == 'Adaptive' or mode == 'Meta' then new_angle = math.random(-15, 15)
         elseif mode == 'Decrease' then new_angle = math.random(-15, -5)
         elseif mode == 'Increase' then new_angle = math.random(5, 15) end
 
         data.pending_yaw = new_angle
+        if mode == 'Meta' then
+            data.meta_counter = 0
+        end
         if tab.delay_force:get() then
-            data.pending_delay = math.random(2, 7)
+            data.pending_delay = math.random(2, 14)
         else
             data.pending_delay = 0
         end
@@ -1347,6 +1353,9 @@ local antibrute = {} do
         local cur_time = globals.realtime()
 
         if data.pending_yaw ~= nil and globals.tickcount() >= data.exec_tick then
+            local yaw_val = data.pending_yaw
+            local delay_val = data.pending_delay
+
             data.add_yaw = data.pending_yaw
             data.delay_mod = data.pending_delay
             data.pending_yaw = nil 
@@ -1359,13 +1368,53 @@ local antibrute = {} do
             else
                 data.reset_time = 0
             end
+
+            -- Console logs
+            if not menu or not menu.visuals or not menu.visuals.logs or menu.visuals.logs:get() then
+                local ar, ag, ab = 100, 100, 115
+                local hr, hg, hb = 150, 150, 215
+                if menu and menu.visuals then
+                    if menu.visuals.logs_color1 then ar, ag, ab = menu.visuals.logs_color1:get() end
+                    if menu.visuals.logs_color2 then hr, hg, hb = menu.visuals.logs_color2:get() end
+                end
+                local mode_val = tab and tab.brute_mode:get() or "Unknown"
+                client.color_log(ar, ag, ab, "[project john] \0")
+                client.color_log(hr, hg, hb, "Anti-bruteforce (" .. mode_val .. ") \0")
+                client.color_log(ar, ag, ab, "[Yaw: \0")
+                client.color_log(hr, hg, hb, tostring(yaw_val) .. "°\0")
+                client.color_log(ar, ag, ab, " | Delay: \0")
+                client.color_log(hr, hg, hb, tostring(delay_val) .. "\0")
+                client.color_log(ar, ag, ab, "]\n")
+            end
+
+            -- Screen feed logs
+            if menu and menu.visuals and menu.visuals.screen_logs and menu.visuals.screen_logs:get() and for_rendering then
+                local mode_val = tab and tab.brute_mode:get() or "Unknown"
+                local text = string.format("[project john] Anti-bruteforce (%s) [Yaw: %d° | Delay: %d]", mode_val, yaw_val, delay_val)
+                table.insert(for_rendering, 1, {text = text, alpha = 0, add_y = 0, tick = globals.curtime() * 64, randomize = math.random(0, 100)})
+            end
         end
 
-        if data.reset_time > 0 and cur_time >= data.reset_time then
-            data.add_yaw = 0
-            data.delay_mod = 0
-            data.reset_time = 0
-            data.pending_yaw = nil
+        if data.reset_time > 0 then
+            if cur_time >= data.reset_time then
+                data.add_yaw = 0
+                data.delay_mod = 0
+                data.reset_time = 0
+                data.pending_yaw = nil
+            else
+                local tab = menu.builder[state_id]
+                local mode = tab and tab.brute_mode:get() or "Disabled"
+                if mode == 'Meta' then
+                    data.add_yaw = math.random(-15, 15)
+                    if math.random(0, 1) == 1 then
+                        data.meta_counter = (data.meta_counter or 0) + 1
+                    end
+                    if (data.meta_counter or 0) > 2 then
+                        ram.jitter = not ram.jitter
+                        data.meta_counter = 0
+                    end
+                end
+            end
         end
 
         return data.add_yaw, data.delay_mod
@@ -1684,6 +1733,13 @@ menu = {
         auto_exploit = pui.checkbox("AA", "Anti-aimbot angles", "Auto exploit switch"),
         auto_exploit_states = pui.multiselect("AA", "Anti-aimbot angles", "\nAuto exploit states", { "Standing", "Walking", "Crouching", "Sneaking" }),
         auto_exploit_avoid = pui.multiselect("AA", "Anti-aimbot angles", "Auto exploit avoid", { "Pistols", "Desert Eagle", "Auto snipers", "Desert Eagle + Crouch" }),
+        extrap_enable = pui.checkbox("AA", "Anti-aimbot angles", "Enable Extrapolation"),
+        extrap_preserve_valid = pui.checkbox("AA", "Anti-aimbot angles", "Preserve valid records"),
+        extrap_record_window = pui.slider("AA", "Anti-aimbot angles", "Record window size", 1, 8, 4, true, "t"),
+        extrap_disable_interp = pui.checkbox("AA", "Anti-aimbot angles", "Disable window interpolation"),
+        extrap_ticks = pui.slider("AA", "Anti-aimbot angles", "Max extrapolation ticks", 1, 8, 4, true, "t"),
+        extrap_tick_adjust = pui.combobox("AA", "Anti-aimbot angles", "Extrap tick adjust", {"No reduction", "Reduce by 1", "Reduce by 2"}),
+        extrap_zero_z = pui.checkbox("AA", "Anti-aimbot angles", "Zero extrap velocity Z"),
     },
     cfg = {
         list = pui.listbox("AA", "Anti-aimbot angles", "Profiles", base.name),
@@ -2044,6 +2100,13 @@ menu.misc.duck_peek_assist_fix:depend(en, misctab)
 menu.misc.auto_exploit:depend(en, misctab)
 menu.misc.auto_exploit_states:depend(en, misctab, menu.misc.auto_exploit)
 menu.misc.auto_exploit_avoid:depend(en, misctab, menu.misc.auto_exploit)
+menu.misc.extrap_enable:depend(en, misctab)
+menu.misc.extrap_preserve_valid:depend(en, misctab, menu.misc.extrap_enable)
+menu.misc.extrap_record_window:depend(en, misctab, menu.misc.extrap_enable, menu.misc.extrap_preserve_valid)
+menu.misc.extrap_disable_interp:depend(en, misctab, menu.misc.extrap_enable)
+menu.misc.extrap_ticks:depend(en, misctab, menu.misc.extrap_enable)
+menu.misc.extrap_tick_adjust:depend(en, misctab, menu.misc.extrap_enable)
+menu.misc.extrap_zero_z:depend(en, misctab, menu.misc.extrap_enable)
 
 menu.aa_options.defensive:set_visible(false)
 menu.aa_options.static_on_def:set_visible(false)
@@ -2107,7 +2170,7 @@ for i = 1, (#lua.conds - 1) do
         body_yaw_degree1 = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Left", -180, 180, 0),
         body_yaw_degree2 = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Right", -180, 180, 0),
         lb_brute = pui.label("AA", "Anti-aimbot angles", dobavok .. "Antibrute Settings"),
-        brute_mode = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Antibrute Mode", {"Disabled", "Adaptive", "Decrease", "Increase"}),
+        brute_mode = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Antibrute Mode", {"Disabled", "Adaptive", "Decrease", "Increase", "Meta"}),
         delay_force = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Force Delay"),
         duration_brute = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Duration", 0, 100, 0, true, "s", 0.1, {[0] = "inf"}),
         force_defensive = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Force Defensive"),
@@ -2464,7 +2527,7 @@ local avoid_backstab = function(lp, enemy)
     return false
 end
 
-local ram = {
+ram = {
     yaw = 0,
     manual_base = 0,
     aa_tickrate = 0,
@@ -3371,7 +3434,7 @@ function aim_fire(e)
 end
 --]=]
 
-local for_rendering = {}
+for_rendering = {}
 
 function reset_tick()
     ram.aa_tickrate = 1
@@ -3408,19 +3471,39 @@ do
     end
     
     local function log_hit_to_console(e, victim_name, group, damage, health, hit_chance, backtrack, wanted_hitgroup, wanted_damage, color, accent)
-        client.color_log(accent.r, accent.g, accent.b, "Damage given to \0")
-        client.color_log(color.r, color.g, color.b, victim_name .. "\0")
-        client.color_log(accent.r, accent.g, accent.b, "'s \0")
-        client.color_log(color.r, color.g, color.b, group .. " \0")
-        client.color_log(accent.r, accent.g, accent.b, "~ \0")
-        client.color_log(color.r, color.g, color.b, damage .. " (" .. wanted_damage .. ") \0")
-        client.color_log(accent.r, accent.g, accent.b, "[HT: \0")
-        client.color_log(color.r, color.g, color.b, math.floor(hit_chance) .. "% \0")
-        client.color_log(accent.r, accent.g, accent.b, "~ | ~ BT:\0 ")
-        client.color_log(color.r, color.g, color.b, backtrack .. "\0")
-        client.color_log(accent.r, accent.g, accent.b, " ~ | ~ RHP:\0 ")
-        client.color_log(color.r, color.g, color.b, health .. "\0")
-        client.color_log(accent.r, accent.g, accent.b, "]\n")
+        local weapon = e.weapon
+        local hit_type = 'hit'
+        if weapon == 'hegrenade' then 
+            hit_type = 'naded'
+        elseif weapon == 'inferno' then
+            hit_type = 'burned'
+        elseif weapon == 'knife' then 
+            hit_type = 'knifed'
+        end
+
+        if hit_type == 'hit' then
+            client.color_log(accent.r, accent.g, accent.b, "Damage given to \0")
+            client.color_log(color.r, color.g, color.b, victim_name .. "\0")
+            client.color_log(accent.r, accent.g, accent.b, "'s \0")
+            client.color_log(color.r, color.g, color.b, group .. " \0")
+            client.color_log(accent.r, accent.g, accent.b, "~ \0")
+            client.color_log(color.r, color.g, color.b, damage .. " (" .. wanted_damage .. ") \0")
+            client.color_log(accent.r, accent.g, accent.b, "[HT: \0")
+            client.color_log(color.r, color.g, color.b, math.floor(hit_chance) .. "% \0")
+            client.color_log(accent.r, accent.g, accent.b, "~ | ~ BT:\0 ")
+            client.color_log(color.r, color.g, color.b, backtrack .. "\0")
+            client.color_log(accent.r, accent.g, accent.b, " ~ | ~ RHP:\0 ")
+            client.color_log(color.r, color.g, color.b, health .. "\0")
+            client.color_log(accent.r, accent.g, accent.b, "]\n")
+        else
+            client.color_log(accent.r, accent.g, accent.b, hit_type:sub(1,1):upper() .. hit_type:sub(2) .. " \0")
+            client.color_log(color.r, color.g, color.b, victim_name .. " \0")
+            client.color_log(accent.r, accent.g, accent.b, "for \0")
+            client.color_log(color.r, color.g, color.b, damage .. " \0")
+            client.color_log(accent.r, accent.g, accent.b, "damage [RHP: \0")
+            client.color_log(color.r, color.g, color.b, health .. "\0")
+            client.color_log(accent.r, accent.g, accent.b, "]\n")
+        end
     end
     
     local function on_aim_fire(e)
@@ -3527,7 +3610,17 @@ do
         )
 
         if menu.visuals.screen_logs:get() then
-            local text = string.format("[project john] damage given to %s for %d (%d)", victim_name, damage, wanted_damage)
+            local text
+            local weapon = e.weapon
+            if weapon == 'hegrenade' then
+                text = string.format("[project john] naded %s for %d damage (remaining HP: %d)", victim_name, damage, health)
+            elseif weapon == 'inferno' then
+                text = string.format("[project john] burned %s for %d damage (remaining HP: %d)", victim_name, damage, health)
+            elseif weapon == 'knife' then
+                text = string.format("[project john] knifed %s for %d damage (remaining HP: %d)", victim_name, damage, health)
+            else
+                text = string.format("[project john] damage given to %s for %d (%d)", victim_name, damage, wanted_damage)
+            end
             table.insert(for_rendering, 1, {text = text, alpha = 0, add_y = 0, tick = globals.curtime() * 64, randomize = math.random(0, 100)})
         end
     end
@@ -4256,7 +4349,10 @@ end)
 
 client.set_event_callback('predict_command', function(arg_140_0)
     local lp = entity.get_local_player()
-    if not lp or defensive_check.last_cmd ~= arg_140_0.command_number then
+    if not lp then
+        return
+    end
+    if defensive_check.last_cmd ~= arg_140_0.command_number then
         return
     end
 
@@ -4841,7 +4937,7 @@ local function predict_cvars()
     -- Общие улучшенные настройки предикта (Режим: Default)
     safe_set_cvar("cl_interpolate", 0)
     safe_set_cvar("cl_interp_ratio", 1)
-    safe_set_cvar("cl_interp", 0.0, true)
+    safe_set_cvar("cl_interp", 0, true)
     safe_set_cvar("cl_predict", 1)
     safe_set_cvar("cl_predictweapons", 1)
     safe_set_cvar("cl_lagcompensation", 1)
@@ -4856,7 +4952,7 @@ end
 local function restore_predict_cvars()
     safe_set_cvar("cl_interpolate", 1)
     safe_set_cvar("cl_interp_ratio", 2)
-    safe_set_cvar("cl_interp", 0.03125, true)
+    safe_set_cvar("cl_interp", 0, true)
     safe_set_cvar("cl_predict", 1)
     safe_set_cvar("cl_predictweapons", 1)
     safe_set_cvar("cl_lagcompensation", 1)
@@ -4874,6 +4970,7 @@ local function predict_callback()
 end
 
 local function on_predict_toggle()
+    if not entity.get_local_player() then return end
     local enabled = menu.enable:get() and menu.misc.predict:get()
     if enabled then
         if not predict_hooked then
@@ -5065,4 +5162,161 @@ end)
 
 client.set_event_callback("setup_command", function(cmd) 
     -- print(cvar.cl_interp:get_float())
+end) 
+
+-- Extrapolation System ported from 8_myfix v2.lua
+local player_records = {}
+
+local function get_lerp_time()
+    local sv_minupdaterate = cvar.sv_minupdaterate
+    local sv_maxupdaterate = cvar.sv_maxupdaterate
+    local cl_updaterate = cvar.cl_updaterate
+    local cl_interp_ratio = cvar.cl_interp_ratio
+    local cl_interp = cvar.cl_interp
+
+    if not sv_minupdaterate or not sv_maxupdaterate or not cl_updaterate or not cl_interp_ratio or not cl_interp then
+        return 0.03125
+    end
+
+    local ur = math.max(sv_minupdaterate:get_float(), math.min(sv_maxupdaterate:get_float(), cl_updaterate:get_float()))
+    local ratio = cl_interp_ratio:get_float()
+    if ratio == 0 then ratio = 1 end
+    return math.max(cl_interp:get_float(), ratio / ur)
+end
+
+local function store_records()
+    if not menu.misc.extrap_enable:get() then return end
+    local players = entity.get_players(true)
+    if not players then return end
+    local max_stored = menu.misc.extrap_record_window:get() * 2
+    for i = 1, #players do
+        local ply = players[i]
+        if entity.is_alive(ply) and not entity.is_dormant(ply) then
+            if not player_records[ply] then
+                player_records[ply] = { simtimes = {}, positions = {}, velocities = {} }
+            end
+            local rec = player_records[ply]
+            local st = entity.get_prop(ply, "m_flSimulationTime")
+            local ox, oy, oz = entity.get_prop(ply, "m_vecOrigin")
+            local pos = vector(ox or 0, oy or 0, oz or 0)
+
+            table.insert(rec.simtimes, 1, st)
+            table.insert(rec.positions, 1, pos)
+
+            local vx, vy, vz = entity.get_prop(ply, "m_vecVelocity")
+            local vel = vector(vx or 0, vy or 0, vz or 0)
+            table.insert(rec.velocities, 1, vel)
+
+            while #rec.simtimes > max_stored do table.remove(rec.simtimes) end
+            while #rec.positions > max_stored do table.remove(rec.positions) end
+            while #rec.velocities > max_stored do table.remove(rec.velocities) end
+        end
+    end
+end
+
+local function rescue_records()
+    if not menu.misc.extrap_enable:get() then return end
+    local players = entity.get_players(true)
+    if not players then return end
+    local lerp = get_lerp_time()
+    local sv_maxunlag = cvar.sv_maxunlag
+    local max_ul = sv_maxunlag and sv_maxunlag:get_float() or 0.2
+    local curtime = globals.curtime()
+
+    for i = 1, #players do
+        local ply = players[i]
+        if entity.is_alive(ply) and not entity.is_dormant(ply) then
+            local st = entity.get_prop(ply, "m_flSimulationTime")
+            if st then
+                local correct = math.min(math.max(0, st + lerp), curtime)
+
+                if math.abs(correct - curtime) > max_ul then
+                    local rec = player_records[ply]
+                    if rec then
+                        for _, saved_st in ipairs(rec.simtimes) do
+                            local sc = math.min(math.max(0, saved_st + lerp), curtime)
+                            if math.abs(sc - curtime) <= max_ul then
+                                entity.set_prop(ply, "m_flSimulationTime", saved_st)
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local EXTRAP_REDUCE = { ["No reduction"] = 0, ["Reduce by 1"] = 1, ["Reduce by 2"] = 2 }
+
+local function get_extrap_ticks()
+    local base = menu.misc.extrap_ticks:get()
+    local reduce = EXTRAP_REDUCE[menu.misc.extrap_tick_adjust:get()] or 0
+    return math.max(0, base - reduce)
+end
+
+local function extrapolate_origin(ply)
+    if not menu.misc.extrap_enable:get() then return end
+    local ticks = get_extrap_ticks()
+    if ticks <= 0 then return end
+
+    local rec = player_records[ply]
+    if not rec or not rec.velocities or #rec.velocities < 1 then return end
+
+    local vel = rec.velocities[1]
+    if not vel then return end
+
+    local vx, vy, vz = vel.x, vel.y, vel.z
+    if menu.misc.extrap_zero_z:get() then vz = 0 end
+
+    local speed = math.sqrt(vx * vx + vy * vy + vz * vz)
+    if speed < 1 then return end
+
+    if menu.misc.extrap_disable_interp:get() and #rec.positions >= 2 then
+        local p1, p2 = rec.positions[1], rec.positions[2]
+        if p1 and p2 then
+            vx = p1.x - p2.x
+            vy = p1.y - p2.y
+            vz = menu.misc.extrap_zero_z:get() and 0 or (p1.z - p2.z)
+        end
+    else
+        local tickinterval = globals.tickinterval()
+        vx = vx * tickinterval
+        vy = vy * tickinterval
+        vz = vz * tickinterval
+    end
+
+    local origin_x, origin_y, origin_z = entity.get_prop(ply, "m_vecOrigin")
+    if not origin_x then return end
+
+    entity.set_prop(ply, "m_vecOrigin", origin_x + vx * ticks, origin_y + vy * ticks, origin_z + vz * ticks)
+end
+
+client.set_event_callback("net_update_end", function()
+    if menu.enable:get() and menu.misc.extrap_enable:get() then
+        if menu.misc.extrap_preserve_valid:get() then
+            store_records()
+        end
+    end
+end)
+
+client.set_event_callback("setup_command", function(cmd)
+    if menu.enable:get() and menu.misc.extrap_enable:get() then
+        if menu.misc.extrap_preserve_valid:get() then
+            rescue_records()
+        end
+        local players = entity.get_players(true)
+        if players then
+            for i = 1, #players do
+                local ply = players[i]
+                if entity.is_alive(ply) and not entity.is_dormant(ply) then
+                    extrapolate_origin(ply)
+                end
+            end
+        end
+    end
+end)
+
+client.set_event_callback("round_start", function()
+    player_records = {}
 end) 
