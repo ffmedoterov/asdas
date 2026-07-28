@@ -2189,7 +2189,7 @@ for i = 1, (#lua.conds - 1) do
         d_pitch_random_delay_enable = pui.checkbox("AA", "Anti-aimbot angles", dobavok_d .. "Random delay enable"),
         d_pitch_random_delay_min = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Random delay min", 0, 24, 0),
         d_pitch_random_delay_max = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Random delay max", 0, 24, 12),
-        d_yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok_d .. "Yaw", {"Freestand", "Forward", "Spin", "180 z", "Slow spin", "Sideways", "Random", "Sin", "Flick"}),
+        d_yaw = pui.combobox("AA", "Anti-aimbot angles", dobavok_d .. "Yaw", {"Off", "Freestand", "Forward", "Spin", "180 z", "Slow spin", "Sideways", "Random", "Sin", "Flick"}),
         d_tick_update = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Tick-update", 0, 14, 2),
         d_offset = pui.slider("AA", "Anti-aimbot angles", dobavok_d .. "Defensive yaw-offset", -180, 180, 0),
     }
@@ -2233,7 +2233,7 @@ for i = 1, (#lua.conds - 1) do
     menu.builder[i].d_pitch_random_delay_max:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_pitch, "Random"}, menu.builder[i].d_pitch_random_delay_enable)
     menu.builder[i].d_yaw:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive)
     menu.builder[i].d_tick_update:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_yaw, "Sideways"})
-    menu.builder[i].d_offset:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive)
+    menu.builder[i].d_offset:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, menu.aa_options.defensive, menu.builder[i].defensive, {menu.builder[i].d_yaw, "Off", true})
     menu.builder[i].lb_brute:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
     menu.builder[i].brute_mode:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
     menu.builder[i].delay_force:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].brute_mode, "Disabled", true})
@@ -2771,9 +2771,10 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
     local doubletap_ref = ref.dt:get() and ref.dt:get_hotkey()
     local charge_check = entity.get_prop(lp, "m_nTickBase") - globals.tickcount()
     if menu.enable:get() then
+        local active_manual = ram.is_legit_active and "None" or menu.aa_options.manual_base:get()
         local overlap = adata.get_overlap(true)
         local fl = entity.get_prop(lp, "m_nTickBase") - globals.tickcount()
-        local is_freestanding = is_freestand(lp) and menu.aa_options.freestand_cond:get(lua.conds_no_g[state]) and menu.aa_options.freestand:get() and menu.aa_options.manual_base:get() == "None"
+        local is_freestanding = is_freestand(lp) and menu.aa_options.freestand_cond:get(lua.conds_no_g[state]) and menu.aa_options.freestand:get() and active_manual == "None"
         ram.tickbase = fl < 0
         ram.spin = ram.spin + 20
         if ram.spin % 360 == 0 then
@@ -2782,10 +2783,10 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
         if menu.misc.fast_ladder:get() then
             fast_ladder(cmd, lp)
         end
-        if menu.aa_options.left:get() or menu.aa_options.right:get() or menu.aa_options.backward:get() or menu.aa_options.forward:get() then
+        if not ram.is_legit_active and (menu.aa_options.left:get() or menu.aa_options.right:get() or menu.aa_options.backward:get() or menu.aa_options.forward:get()) then
             ram.manual_active = 1
         end
-        if ram.manual_active ~= 0 then
+        if not ram.is_legit_active and ram.manual_active ~= 0 then
             manualing()
             ram.manual_active = ram.manual_active + 1
         end
@@ -2857,23 +2858,25 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
             ram.anti_aim.jitter_update = ram.jitter
         end
         if not ram.defensive_work then
-            if menu.aa_options.manual_base:get() == "None" then
+            if active_manual == "None" then
                 ram.anti_aim.manual = 0
                 ram.anti_aim.at_target = menu.aa_options.yaw_base:get()
             else
                 ram.anti_aim.at_target = false
-                if menu.aa_options.manual_base:get() == "Backward" then
+                if active_manual == "Backward" then
                     ram.anti_aim.manual = 0
-                elseif menu.aa_options.manual_base:get() == "Left" then
+                elseif active_manual == "Left" then
                     ram.anti_aim.manual = -90
-                elseif menu.aa_options.manual_base:get() == "Right" then
+                elseif active_manual == "Right" then
                     ram.anti_aim.manual = 90
-                elseif menu.aa_options.manual_base:get() == "Forward" then
+                elseif active_manual == "Forward" then
                     ram.anti_aim.manual = 180
                 end
             end
+            
             if tab.pitch:get() == "Off" then
-                ram.anti_aim.pitchmode = "Off"
+                ram.anti_aim.pitchmode = "Custom"
+                ram.anti_aim.pitch = 0
             elseif tab.pitch:get() == "Down" then
                 ram.anti_aim.pitchmode = "Custom"
                 ram.anti_aim.pitch = 89
@@ -2965,7 +2968,7 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
                 ram.defensive.pitch_phase = ram.defensive.pitch_phase + 1
                 ram.defensive.pitch_update = false
             end
-            if menu.aa_options.static_on_def:get() and menu.aa_options.defensive:get() and tab.defensive:get() and menu.aa_options.manual_base:get() == "None" then
+            if menu.aa_options.static_on_def:get() and menu.aa_options.defensive:get() and tab.defensive:get() and active_manual == "None" then
                 ram.anti_aim.cheat_yaw = "Off"
                 ram.anti_aim.add = 0
                 ram.anti_aim.jitter = 0
@@ -2975,7 +2978,7 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
                 ram.anti_aim.fsbodyyaw = false
             end
         else
-            if menu.aa_options.manual_base:get() == "None" and menu.aa_options.static_on_def:get() then
+            if active_manual == "None" and menu.aa_options.static_on_def:get() then
                 ram.anti_aim.cheat_yaw = "Off"
                 ram.anti_aim.add = 0
                 ram.anti_aim.jitter = 0
@@ -3065,6 +3068,8 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
                 if tab.d_yaw:get() == "Forward" then
                     ram.anti_aim.yaw = 180 + tab.d_offset:get()
                     ram.anti_aim.fake = 180
+                elseif tab.d_yaw:get() == "Off" then
+
                 elseif tab.d_yaw:get() == "Freestand" then
                     local freestand_dir = get_freestand_direction(entity.get_local_player())
                     if freestand_dir == -1 then
@@ -3134,7 +3139,7 @@ function builder(cmd, state, tab, avoid_backstabing, lp, safehead, side)
                 end
             end
         end
-        if menu.aa_options.freestand_cond:get(lua.conds_no_g[state]) and menu.aa_options.freestand:get() and menu.aa_options.manual_base:get() == "None" then
+        if menu.aa_options.freestand_cond:get(lua.conds_no_g[state]) and menu.aa_options.freestand:get() and active_manual == "None" then
             ram.anti_aim.freestand = true
         else
             ram.anti_aim.freestand = false
@@ -4259,22 +4264,24 @@ function setup_commanding(cmd)
     local is_planting = in_bomb_zone and is_t
 
     local is_legit_active = is_e and not is_defusing and not is_planting and menu.builder[8] and menu.builder[8].enable:get()
+    ram.is_legit_active = is_legit_active
     local base_state = player.get_state(cmd, lp)
     if is_legit_active then
         base_state = 7
         cmd.in_use = 0
     end
 
-    local is_freestanding = is_freestand(lp) and menu.aa_options.freestand_cond:get(lua.conds_no_g[base_state]) and menu.aa_options.freestand:get() and menu.aa_options.manual_base:get() == "None"
+    local is_manual_active = menu.aa_options.manual_base:get() ~= "None" and not is_legit_active
+    local is_freestanding = is_freestand(lp) and menu.aa_options.freestand_cond:get(lua.conds_no_g[base_state]) and menu.aa_options.freestand:get() and not is_manual_active
 
     local state = base_state
-    if menu.aa_options.manual_base:get() ~= "None" then
+    if is_manual_active then
         state = 8
     elseif is_freestanding then
         state = 9
     end
 
-    ind.scoped.state_name = menu.aa_options.manual_base:get() == "None" and ("-" .. string.upper(lua.conds_no_g[state]) .. "-") or ("-" .. string.upper(menu.aa_options.manual_base:get()) .. "-")
+    ind.scoped.state_name = not is_manual_active and ("-" .. string.upper(lua.conds_no_g[state]) .. "-") or ("-" .. string.upper(menu.aa_options.manual_base:get()) .. "-")
     local avoid_backstabing = false
     local safe_head = false
     local side = "none"
@@ -5266,8 +5273,11 @@ local function extrapolate_origin(ply)
     local vel = rec.velocities[1]
     if not vel then return end
 
+    local flags = entity.get_prop(ply, "m_fFlags") or 0
+    local on_ground = bit.band(flags, 1) ~= 0
+
     local vx, vy, vz = vel.x, vel.y, vel.z
-    if menu.misc.extrap_zero_z:get() then vz = 0 end
+    if menu.misc.extrap_zero_z:get() or on_ground then vz = 0 end
 
     local speed = math.sqrt(vx * vx + vy * vy + vz * vz)
     if speed < 1 then return end
@@ -5277,7 +5287,7 @@ local function extrapolate_origin(ply)
         if p1 and p2 then
             vx = p1.x - p2.x
             vy = p1.y - p2.y
-            vz = menu.misc.extrap_zero_z:get() and 0 or (p1.z - p2.z)
+            vz = (menu.misc.extrap_zero_z:get() or on_ground) and 0 or (p1.z - p2.z)
         end
     else
         local tickinterval = globals.tickinterval()
