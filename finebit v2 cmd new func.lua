@@ -1727,7 +1727,9 @@ menu = {
             z = pui.slider("AA", "Anti-aimbot angles", "Viewmodel z", -100, 100, cvar.viewmodel_offset_z:get_int() * 10, true, "", 0.1, true),
             fov = pui.slider("AA", "Anti-aimbot angles", "Viewmodel fov", 0, 120, cvar.viewmodel_fov:get_int()),
         },
-        animfix = pui.multiselect("AA", "Anti-aimbot angles", "Animbreakers!", {"Legs", "Jumping", "Dirty sprite"}),
+        animfix = pui.multiselect("AA", "Anti-aimbot angles", "Animbreakers!", {"Legs", "Jumping", "Dirty sprite", "Static in air", "Move lean"}),
+        static_in_air_value = pui.slider("AA", "Anti-aimbot angles", "Static in air value", 0, 100, 50, true, "%"),
+        move_lean_value = pui.slider("AA", "Anti-aimbot angles", "Move lean value", 0, 100, 50, true, "%"),
         debug = pui.checkbox("AA", "Anti-aimbot angles", "Developer mode"),
         duck_peek_assist_fix = pui.checkbox("AA", "Anti-aimbot angles", "Crouch with duck peek assist"),
         auto_exploit = pui.checkbox("AA", "Anti-aimbot angles", "Auto exploit switch"),
@@ -2107,6 +2109,8 @@ menu.misc.extrap_disable_interp:depend(en, misctab, menu.misc.extrap_enable)
 menu.misc.extrap_ticks:depend(en, misctab, menu.misc.extrap_enable)
 menu.misc.extrap_tick_adjust:depend(en, misctab, menu.misc.extrap_enable)
 menu.misc.extrap_zero_z:depend(en, misctab, menu.misc.extrap_enable)
+menu.misc.static_in_air_value:depend(en, misctab, {menu.misc.animfix, "Static in air"})
+menu.misc.move_lean_value:depend(en, misctab, {menu.misc.animfix, "Move lean"})
 
 menu.aa_options.defensive:set_visible(false)
 menu.aa_options.static_on_def:set_visible(false)
@@ -4315,21 +4319,50 @@ function setup_commanding(cmd)
 end
 
 function pre_rendering()
-    if #menu.misc.animfix:get() == 0 then return end
     local lp = entity.get_local_player()
     if lp == nil or not entity.is_alive(lp) then return end
     local local_index = c_entity.new(lp)
     local local_anim_state = local_index:get_anim_state()
-    if menu.misc.animfix:get("Legs") then
-        entity.set_prop(lp, "m_flPoseParameter", 1, globals.tickcount() % 4 > 1 and 0.5 or 1)
-    end
-    if menu.misc.animfix:get("Jumping") then
-        entity.set_prop(lp, "m_flPoseParameter", client.random_int(0, 10) / 10, 6)
-    end
-    if menu.misc.animfix:get("Dirty sprite") then
-        local self_anim_overlay = local_index:get_anim_overlay(12)
-        if not self_anim_overlay then return end
-        self_anim_overlay.weight = player.get_velocity(lp) / 30
+
+    -- Original animfix
+    local animfix_selected = menu.misc.animfix:get() or {}
+    if #animfix_selected > 0 then
+        if menu.misc.animfix:get("Legs") then
+            entity.set_prop(lp, "m_flPoseParameter", 1, globals.tickcount() % 4 > 1 and 0.5 or 1)
+        end
+        if menu.misc.animfix:get("Jumping") then
+            entity.set_prop(lp, "m_flPoseParameter", client.random_int(0, 10) / 10, 6)
+        end
+        if menu.misc.animfix:get("Dirty sprite") then
+            local self_anim_overlay = local_index:get_anim_overlay(12)
+            if self_anim_overlay then
+                self_anim_overlay.weight = player.get_velocity(lp) / 30
+            end
+        end
+
+        -- Static in air
+        if menu.misc.animfix:get("Static in air") then
+            local flags = entity.get_prop(lp, "m_fFlags")
+            if flags and bit.band(flags, 1) == 0 then -- Not on ground
+                local air_weight = menu.misc.static_in_air_value:get()
+                entity.set_prop(lp, "m_flPoseParameter", air_weight * 0.01, 6)
+            end
+        end
+
+        -- Move lean
+        if menu.misc.animfix:get("Move lean") then
+            local move_lean_val = menu.misc.move_lean_value:get()
+            local vx, vy = entity.get_prop(lp, "m_vecVelocity")
+            if vx and vy and (vx * vx + vy * vy) > 1.0 then
+                local self_anim_overlay = local_index:get_anim_overlay(12)
+                if self_anim_overlay then
+                    self_anim_overlay.weight = move_lean_val * 0.01
+                    pcall(function()
+                        self_anim_overlay.weight_delta_rate = move_lean_val * 0.01
+                    end)
+                end
+            end
+        end
     end
 end
 
