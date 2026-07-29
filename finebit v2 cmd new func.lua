@@ -1637,14 +1637,14 @@ menu = {
     lbl1 = pui.label("AA", "Anti-aimbot angles", "Project John \b8d9bbc\b313847FF[dev edition]"),
     lbl2 = pui.label("AA", "Anti-aimbot angles", "Release \v[dev]"),
     enable = pui.checkbox("AA", "Anti-aimbot angles", "Enable script"),
-    tab = pui.combobox("AA", "Anti-aimbot angles", "sections", {"\affc0cbFFMAIN", "-- Anti-aim", "-- visuals & miscellaneous", "-- configs"}),
+    tab = pui.combobox("AA", "Anti-aimbot angles", "sections", {"\affc0cbFFMAIN", "-- Anti-aim", "-- Visuals", "-- Miscellaneous", "-- Configs"}),
     tab_fl = pui.combobox("AA", "Fake lag", "sections", {"\affc0cbFFOTHER","-- fake lag", "-- binds"}),
 
     
     
 
     -- nav_selector = pui.listbox("AA", "Anti-aimbot angles", "Navigation", {"global", "Anti-aim", "visuals & miscellaneous", "configs"}),
-    fl_nav_selector = pui.listbox("AA", "Other", "Navigation", {"\affc0cbFFMAIN", "-- Anti-aim", "-- visuals & miscellaneous", "-- configs", "\affc0cbFFOTHER", "-- fake lag", "-- binds"}),
+    fl_nav_selector = pui.listbox("AA", "Other", "Navigation", {"\affc0cbFFMAIN", "-- Anti-aim", "-- Visuals", "-- Miscellaneous", "-- Configs", "\affc0cbFFOTHER", "-- Fake lag", "-- Binds"}),
 
     fake_lag_amount = pui.combobox("AA", "Fake lag", "Amount ", {"Dynamic", "Maximum", "Fluctuate"}),
     fake_lag_variance = pui.slider("AA", "Fake lag", "Variance ", 0, 100, 1, true, "%"),
@@ -1684,8 +1684,15 @@ menu = {
         lbl4 = pui.label("AA", "Anti-aimbot angles", "Miss color (feed)"),
         logs_color3 = pui.color_picker("AA", "Anti-aimbot angles", "Miss color", 200,120,120,255),
         aspect_ratio_type = pui.combobox("AA", "Anti-aimbot angles", "Aspect ratio mode", {"Disabled", "Normal", "Newcomer"}),
-        normal_aspect_ratio = pui.slider("AA", "Anti-aimbot angles", "aspect ratio", 0, 200, 100, true, "%", 1, aspect_table),
-        newcomer_aspect_ratio = pui.slider("AA", "Anti-aimbot angles", "aspect ratio ", 0, 200, 177, true, "", 0.01),
+        normal_aspect_ratio = pui.slider("AA", "Anti-aimbot angles", "Aspect ratio", 0, 200, 100, true, "%", 1, aspect_table),
+        newcomer_aspect_ratio = pui.slider("AA", "Anti-aimbot angles", "Aaspect ratio ", 0, 200, 177, true, "", 0.01),
+        hitmarker = pui.checkbox("AA", "Anti-aimbot angles", "Hitmarker"),
+        hitmarkerhl = pui.label("AA", "Anti-aimbot angles", "Horizontal"),
+        hitmarkerh = pui.color_picker("AA", "Anti-aimbot angles", "Horizontal", 0,255,255,255),
+        hitmarkervl = pui.label("AA", "Anti-aimbot angles", "Vrtical"),
+        hitmarkerv = pui.color_picker("AA", "Anti-aimbot angles", "Vrtical", 0,255,0,255),
+        bullettracer = pui.checkbox("AA", "Anti-aimbot angles", "Bullet tracers"),
+        bullettracerc = pui.color_picker("AA", "Anti-aimbot angles", "Color", 255, 255, 255, 255),
     },
     misc = {
         resolver = pui.checkbox("AA", "Anti-aimbot angles", "Resolver"),
@@ -1730,7 +1737,6 @@ menu = {
         animfix = pui.multiselect("AA", "Anti-aimbot angles", "Animbreakers!", {"Legs", "Jumping", "Dirty sprite", "Static in air", "Move lean"}),
         static_in_air_value = pui.slider("AA", "Anti-aimbot angles", "Static in air value", 0, 100, 50, true, "%"),
         move_lean_value = pui.slider("AA", "Anti-aimbot angles", "Move lean value", 0, 100, 50, true, "%"),
-        debug = pui.checkbox("AA", "Anti-aimbot angles", "Developer mode"),
         duck_peek_assist_fix = pui.checkbox("AA", "Anti-aimbot angles", "Crouch with duck peek assist"),
         auto_exploit = pui.checkbox("AA", "Anti-aimbot angles", "Auto exploit switch"),
         auto_exploit_states = pui.multiselect("AA", "Anti-aimbot angles", "\nAuto exploit states", { "Standing", "Walking", "Crouching", "Sneaking" }),
@@ -1742,6 +1748,7 @@ menu = {
         extrap_ticks = pui.slider("AA", "Anti-aimbot angles", "Max extrapolation ticks", 1, 8, 4, true, "t"),
         extrap_tick_adjust = pui.combobox("AA", "Anti-aimbot angles", "Extrap tick adjust", {"No reduction", "Reduce by 1", "Reduce by 2"}),
         extrap_zero_z = pui.checkbox("AA", "Anti-aimbot angles", "Zero extrap velocity Z"),
+        debug = pui.checkbox("AA", "Anti-aimbot angles", "Developer mode"),
     },
     cfg = {
         list = pui.listbox("AA", "Anti-aimbot angles", "Profiles", base.name),
@@ -1775,8 +1782,8 @@ menu.fake_lag_limit:depend(menu.enable, {menu.tab_fl, "-- fake lag"})
 menu.fl_nav_selector:depend(menu.enable)
 menu.fl_nav_selector:set_callback(function()
     local idx = menu.fl_nav_selector:get()
-    if idx <= 3 then
-        local main = {"MAIN", "-- Anti-aim", "-- visuals & miscellaneous", "-- configs"}
+    if idx <= 4 then
+        local main = {"MAIN", "-- Anti-aim", "-- Visuals", "-- Miscellaneous", "-- Configs"}
         if idx == 0 then -- MAIN
             menu.fl_nav_selector:set(1) -- Переключаем на Anti-aim
             menu_seta("-- Anti-aim")
@@ -1785,11 +1792,11 @@ menu.fl_nav_selector:set_callback(function()
         end
     else
         local fl = {"OTHER", "-- fake lag", "-- binds"}
-        if idx == 4 then -- OTHER
-            menu.fl_nav_selector:set(5) -- Переключаем на fake lag
+        if idx == 5 then -- OTHER
+            menu.fl_nav_selector:set(6) -- Переключаем на fake lag
             menu_seta_fl("-- fake lag")
         else
-            menu_seta_fl(fl[idx - 3])
+            menu_seta_fl(fl[idx - 4])
         end
     end
 end)
@@ -1904,14 +1911,14 @@ client.set_event_callback("shutdown", function()
     ref.roll[1]:set_visible(true)
 end)
 
-menu.cfg.list:depend(menu.enable, {menu.tab, "-- configs"})
-menu.cfg.name:depend(menu.enable, {menu.tab, "-- configs"})
-menu.cfg.load:depend(menu.enable, {menu.tab, "-- configs"})
-menu.cfg.saveing:depend(menu.enable, {menu.tab, "-- configs"})
-menu.cfg.create:depend(menu.enable, {menu.tab, "-- configs"})
-menu.cfg.delete:depend(menu.enable, {menu.tab, "-- configs"})
-menu.cfg.import:depend(menu.enable, {menu.tab, "-- configs"})
-menu.cfg.export:depend(menu.enable, {menu.tab, "-- configs"})
+menu.cfg.list:depend(menu.enable, {menu.tab, "-- Configs"})
+menu.cfg.name:depend(menu.enable, {menu.tab, "-- Configs"})
+menu.cfg.load:depend(menu.enable, {menu.tab, "-- Configs"})
+menu.cfg.saveing:depend(menu.enable, {menu.tab, "-- Configs"})
+menu.cfg.create:depend(menu.enable, {menu.tab, "-- Configs"})
+menu.cfg.delete:depend(menu.enable, {menu.tab, "-- Configs"})
+menu.cfg.import:depend(menu.enable, {menu.tab, "-- Configs"})
+menu.cfg.export:depend(menu.enable, {menu.tab, "-- Configs"})
 
 local manu = {
     left = false,
@@ -2046,8 +2053,8 @@ end
 
 local en = {menu.enable, true}
 local menutab = {menu.tab, "-- Anti-aim"}
-local misctab = {menu.tab, "-- visuals & miscellaneous"}
-local visuals = {menu.tab, "-- visuals & miscellaneous"}
+local misctab = {menu.tab, "-- Miscellaneous"}
+local visuals = {menu.tab, "-- Visuals"}
 
 menu.mode:depend(en, menutab, aa_options)
 menu.state:depend(en, menutab, aa_options, {menu.mode, "Builder"})
@@ -2129,6 +2136,14 @@ menu.visuals.logs_color3:depend(en, visuals, menu.visuals.logs)
 menu.visuals.aspect_ratio_type:depend(en, visuals)
 menu.visuals.normal_aspect_ratio:depend(en, visuals, {menu.visuals.aspect_ratio_type, "Normal"})
 menu.visuals.newcomer_aspect_ratio:depend(en, visuals, {menu.visuals.aspect_ratio_type, "Newcomer"})
+menu.visuals.hitmarker:depend(en, visuals)
+menu.visuals.hitmarkerhl:depend(en, visuals, menu.visuals.hitmarker)
+menu.visuals.hitmarkerh:depend(en, visuals, menu.visuals.hitmarker)
+menu.visuals.hitmarkervl:depend(en, visuals, menu.visuals.hitmarker)
+menu.visuals.hitmarkerv:depend(en, visuals, menu.visuals.hitmarker)
+menu.visuals.bullettracer:depend(en, visuals)
+menu.visuals.bullettracerc:depend(en, visuals)
+
 
 function aspect_ratio()
     if menu.visuals.aspect_ratio_type:get() ~= "Disabled" and menu.enable:get() then
@@ -2150,6 +2165,73 @@ function aspect_ratio()
         client.set_cvar("r_aspectratio", 0)
     end
 end
+local queueh = {}
+
+local function aim_fire_h(c)
+	queueh[globals.tickcount()] = {c.x,c.y,c.z, globals.curtime() + 2}
+end
+
+function hitmarker()
+    if not menu.visuals.hitmarker:get() then
+        return
+    end
+
+    local rh, gh, bh = menu.visuals.hitmarkerh:get()
+    local rv, gv, bv = menu.visuals.hitmarkerv:get()
+
+    for tick, data in pairs(queueh) do
+        if globals.curtime() <= data[4] then
+            local x1, y1 = renderer.world_to_screen(data[1], data[2], data[3])
+            if x1 ~= nil and y1 ~= nil then
+            --renderer.circle_outline(x1,y1,255,255,255,255,5,0,1.0,1)
+            renderer.line(x1 - 6, y1, x1 + 6, y1, rh, gh, bh, 255)
+            renderer.line(x1, y1 - 6, x1, y1 + 6, rv, gv, bv, 255)
+            end
+        end
+    end
+end
+
+client.set_event_callback("aim_fire",aim_fire_h)
+client.set_event_callback("paint",hitmarker)
+
+client.set_event_callback("round_prestart", function()
+    queueh = {}
+end)
+
+local queue = {}
+
+client.set_event_callback("bullet_impact", function(e)
+    if not menu.visuals.bullettracer:get() then
+        return
+    end
+    if client.userid_to_entindex(e.userid) ~= entity.get_local_player() then
+        return
+    end
+    local lx, ly, lz = client.eye_position()
+    queue[globals.tickcount()] = {lx, ly, lz, e.x, e.y, e.z, globals.curtime() + 2}
+end)
+
+client.set_event_callback("paint", function()
+    if not menu.visuals.bullettracer:get() then
+        return
+    end
+    for tick, data in pairs(queue) do
+        if globals.curtime() <= data[7] then
+            local x1, y1 = renderer.world_to_screen(data[1], data[2], data[3])
+            local x2, y2 = renderer.world_to_screen(data[4], data[5], data[6])
+            if x1 ~= nil and x2 ~= nil and y1 ~= nil and y2 ~= nil then
+                renderer.line(x1, y1, x2, y2, menu.visuals.bullettracerc:get())
+            end
+        end
+    end
+end)
+
+client.set_event_callback("round_prestart", function()
+    if not menu.visuals.bullettracer:get() then
+        return
+    end
+    queue = {}
+end)
 
 for i = 1, (#lua.conds - 1) do
     local dobavok = "\a3d4355FF" .. lua.short_conds[i] .. "\r "
