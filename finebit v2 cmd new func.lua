@@ -1687,6 +1687,7 @@ menu = {
         normal_aspect_ratio = pui.slider("AA", "Anti-aimbot angles", "Aspect ratio", 0, 200, 100, true, "%", 1, aspect_table),
         newcomer_aspect_ratio = pui.slider("AA", "Anti-aimbot angles", "Aaspect ratio ", 0, 200, 177, true, "", 0.01),
         hitmarker = pui.checkbox("AA", "Anti-aimbot angles", "Hitmarker"),
+        hitmarkers = pui.slider("AA", "Anti-aimbot angles", "Hitmarker", 0, 10, 6, true, ""),
         hitmarkerhl = pui.label("AA", "Anti-aimbot angles", "Horizontal"),
         hitmarkerh = pui.color_picker("AA", "Anti-aimbot angles", "Horizontal", 0,255,255,255),
         hitmarkervl = pui.label("AA", "Anti-aimbot angles", "Vrtical"),
@@ -1698,9 +1699,9 @@ menu = {
         resolver = pui.checkbox("AA", "Anti-aimbot angles", "Resolver"),
         predict = pui.hotkey("AA", "Anti-aimbot angles", "Predict"),
         predict_mode = pui.combobox("AA", "Anti-aimbot angles", "Predict Mode", {"Default", "Experimental"}),
-        -- btexp = pui.checkbox("AA", "Anti-aimbot angles", "Force Backtrack", function()            
-        --     cmd.tickbase_shift = 16
-        -- end),
+        btexp = pui.checkbox("AA", "Anti-aimbot angles", "Force Backtrack", function()            
+            cmd.tickbase_shift = 16
+        end),
         aimtools_enable = pui.checkbox("AA", "Anti-aimbot angles", "Aimtools"),
         aimtools = {
             weapon = pui.combobox("AA", "Anti-aimbot angles", "Weapons", {"Desert Eagle", "SSG 08", "AWP"}),
@@ -2079,7 +2080,7 @@ menu.aa_options.safe_head:depend(en, {menu.tab_fl, "-- binds"})
 menu.misc.resolver:depend(en, misctab)
 menu.misc.predict:depend(en, misctab)
 menu.misc.predict_mode:depend(en, misctab)
--- menu.misc.btexp:depend(en, misctab)
+menu.misc.btexp:depend(en, misctab)
 menu.misc.aimtools_enable:depend(en, misctab)
 menu.misc.aimtools.weapon:depend(en, misctab, menu.misc.aimtools_enable)
 menu.misc.aimtools.deagle.mode1:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "Desert Eagle"})
@@ -2181,11 +2182,12 @@ function hitmarker()
 
     for tick, data in pairs(queueh) do
         if globals.curtime() <= data[4] then
+            local size = menu.visuals.hitmarkers:get()
             local x1, y1 = renderer.world_to_screen(data[1], data[2], data[3])
             if x1 ~= nil and y1 ~= nil then
             --renderer.circle_outline(x1,y1,255,255,255,255,5,0,1.0,1)
-            renderer.line(x1 - 6, y1, x1 + 6, y1, rh, gh, bh, 255)
-            renderer.line(x1, y1 - 6, x1, y1 + 6, rv, gv, bv, 255)
+            renderer.line(x1 - size, y1, x1 + size, y1, rh, gh, bh, 255)
+            renderer.line(x1, y1 - size, x1, y1 + size, rv, gv, bv, 255)
             end
         end
     end
