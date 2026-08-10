@@ -1341,7 +1341,9 @@ local antibrute = {} do
             data.meta_counter = 0
         end
         if tab.delay_force:get() then
-            data.pending_delay = math.random(2, 14)
+            local d1 = tab.delay_force_degree1
+            local d2 = tab.delay_force_degree2
+            data.pending_delay = math.random(d1, d2)
         else
             data.pending_delay = 0
         end
@@ -1699,9 +1701,9 @@ menu = {
         resolver = pui.checkbox("AA", "Anti-aimbot angles", "Resolver"),
         predict = pui.hotkey("AA", "Anti-aimbot angles", "Predict"),
         predict_mode = pui.combobox("AA", "Anti-aimbot angles", "Predict Mode", {"Default", "Experimental"}),
-        btexp = pui.checkbox("AA", "Anti-aimbot angles", "Force Backtrack", function()            
-            cmd.tickbase_shift = 16
-        end),
+        -- btexp = pui.checkbox("AA", "Anti-aimbot angles", "Force Backtrack", function()            
+        --     cmd.tickbase_shift = 16
+        -- end),
         aimtools_enable = pui.checkbox("AA", "Anti-aimbot angles", "Aimtools"),
         aimtools = {
             weapon = pui.combobox("AA", "Anti-aimbot angles", "Weapons", {"Desert Eagle", "SSG 08", "AWP"}),
@@ -2080,7 +2082,7 @@ menu.aa_options.safe_head:depend(en, {menu.tab_fl, "-- binds"})
 menu.misc.resolver:depend(en, misctab)
 menu.misc.predict:depend(en, misctab)
 menu.misc.predict_mode:depend(en, misctab)
-menu.misc.btexp:depend(en, misctab)
+-- menu.misc.btexp:depend(en, misctab)
 menu.misc.aimtools_enable:depend(en, misctab)
 menu.misc.aimtools.weapon:depend(en, misctab, menu.misc.aimtools_enable)
 menu.misc.aimtools.deagle.mode1:depend(en, misctab, menu.misc.aimtools_enable, {menu.misc.aimtools.weapon, "Desert Eagle"})
@@ -2261,6 +2263,8 @@ for i = 1, (#lua.conds - 1) do
         lb_brute = pui.label("AA", "Anti-aimbot angles", dobavok .. "Antibrute Settings"),
         brute_mode = pui.combobox("AA", "Anti-aimbot angles", dobavok .. "Antibrute Mode", {"Disabled", "Adaptive", "Decrease", "Increase", "Meta"}),
         delay_force = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Force Delay"),
+        delay_force_degree1 = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Min", 2, 13, 2),
+        delay_force_degree2 = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Max", 2, 14, 6),
         duration_brute = pui.slider("AA", "Anti-aimbot angles", dobavok .. "Duration", 0, 100, 0, true, "s", 0.1, {[0] = "inf"}),
         force_defensive = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Force Defensive"),
         defensive = pui.checkbox("AA", "Anti-aimbot angles", dobavok .. "Defensive aa"),
@@ -2326,6 +2330,8 @@ for i = 1, (#lua.conds - 1) do
     menu.builder[i].lb_brute:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
     menu.builder[i].brute_mode:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable)
     menu.builder[i].delay_force:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].brute_mode, "Disabled", true})
+    menu.builder[i].delay_force_degree1:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].brute_mode, "Disabled", true}, menu.builder[i].delay_force)
+    menu.builder[i].delay_force_degree2:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].brute_mode, "Disabled", true}, menu.builder[i].delay_force)
     menu.builder[i].duration_brute:depend(en, menutab, aa_options, {menu.mode, "Builder"}, {menu.state, lua.conds[i]}, menu.builder[i].enable, {menu.builder[i].brute_mode, "Disabled", true})
 end
 
